@@ -13,6 +13,8 @@ import {
 import { isRolledUp } from '../../../shared/condense'
 import { DETAIL_MONTHS } from '../../../shared/constants'
 import { recentMonths, shiftMonth } from '../../../shared/months'
+import { flowCategory } from '../../../shared/categorize'
+import Accordion from '../Accordion'
 import AppHeader from '../AppHeader'
 import AppShell from '../AppShell'
 import Button from '../Button'
@@ -64,6 +66,7 @@ export default function DashboardScreen() {
   const current = months[months.length - 1] ?? months[0] ?? ''
   const [month, setMonth] = useState(current)
   const [accountId, setAccountId] = useState('all')
+  const [category, setCategory] = useState('all')
   const [sort, setSort] = useState<SortKey>('newest')
   const [query, setQuery] = useState('')
   const monthRowRef = useRef<HTMLDivElement>(null)
@@ -84,18 +87,30 @@ export default function DashboardScreen() {
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [transactions, view?.accounts])
-  const scoped = accountId === 'all' ? transactions : transactions.filter((tx) => tx.accountId === accountId)
+  const accountScoped = accountId === 'all' ? transactions : transactions.filter((tx) => tx.accountId === accountId)
   const selected = month === 'all' ? null : month
-  const categories = spendByCategory(scoped, selected)
-  const cards = spendByAccount(transactions, selected)
-  const byMonth = spendByMonthStacked(scoped, months)
-  const monthFlows = breakdownByMonth(scoped, months)
+  const inPeriod = accountScoped.filter((tx) => month === 'all' || tx.date.startsWith(month))
+  const categoryOptions = [...inPeriod.reduce((totals, tx) => {
+    const label = flowCategory(tx)
+    totals.set(label, (totals.get(label) ?? 0) + Math.abs(tx.amount))
+    return totals
+  }, new Map<string, number>()).entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([label]) => label)
+  const viewed = category === 'all' ? accountScoped : accountScoped.filter((tx) => flowCategory(tx) === category)
+  const categories = spendByCategory(accountScoped, selected)
+  const cards = spendByAccount(
+    category === 'all' ? transactions : transactions.filter((tx) => flowCategory(tx) === category),
+    selected,
+  )
+  const byMonth = spendByMonthStacked(viewed, months).filter((row) => row.amount > 0 || selected === row.key)
+  const monthFlows = breakdownByMonth(viewed, months)
   const primaryMonth = month === 'all' ? current : month
-  const periodOut = outflowTotal(scoped, selected)
-  const periodIn = inflowTotal(scoped, selected)
-  const priorOut = outflowTotal(scoped, shiftMonth(primaryMonth, -1))
-  const priorIn = inflowInMonth(scoped, shiftMonth(primaryMonth, -1))
-  const periodTransactions = scoped.filter((tx) => month === 'all' || tx.date.startsWith(month))
+  const periodOut = outflowTotal(viewed, selected)
+  const periodIn = inflowTotal(viewed, selected)
+  const priorOut = outflowTotal(viewed, shiftMonth(primaryMonth, -1))
+  const priorIn = inflowInMonth(viewed, shiftMonth(primaryMonth, -1))
+  const periodTransactions = viewed.filter((tx) => month === 'all' || tx.date.startsWith(month))
   const rolledUp = periodTransactions.some(isRolledUp)
   const queryText = query.trim().toLowerCase()
   const listed = periodTransactions
@@ -110,6 +125,12 @@ export default function DashboardScreen() {
   const synced = formatSynced(view?.syncedAt ?? null)
   const delta = month !== 'all' && priorOut > 0 ? Math.round(((periodOut - priorOut) / priorOut) * 100) : null
   const versus = delta == null ? null : `${delta > 0 ? '+' : ''}${delta}% vs prior month`
+  const scopeLabel = [month === 'all' ? null : formatMonthShort(primaryMonth), category === 'all' ? null : category]
+    .filter(Boolean)
+    .join(' · ')
+  const categoryChips = category !== 'all' && !categoryOptions.includes(category)
+    ? [category, ...categoryOptions]
+    : categoryOptions
 
   useEffect(() => {
     centerActiveChip(monthRowRef.current)
@@ -186,7 +207,7 @@ export default function DashboardScreen() {
         <>
           <div className="stat-grid">
             <article className="surface-card stat stat--lead">
-              <p className="stat__label">Money out{month === 'all' ? '' : ` · ${formatMonthShort(primaryMonth)}`}</p>
+              <p className="stat__label">Money out{scopeLabel ? ` · ${scopeLabel}` : ''}</p>
               <p className="stat__value">{formatMoney(periodOut)}</p>
               {versus ? (
                 <p className={delta != null && delta > 0 ? 'stat__meta stat__meta--up' : 'stat__meta stat__meta--down'}>{versus}</p>
@@ -195,7 +216,7 @@ export default function DashboardScreen() {
               )}
             </article>
             <article className="surface-card stat stat--in">
-              <p className="stat__label">Money in{month === 'all' ? '' : ` · ${formatMonthShort(primaryMonth)}`}</p>
+              <p className="stat__label">Money in{scopeLabel ? ` · ${scopeLabel}` : ''}</p>
               <p className="stat__value">{formatMoney(periodIn)}</p>
               <p className="stat__meta">{month === 'all' ? 'All months' : `Prior month ${formatMoney(priorIn)}`}</p>
             </article>
@@ -206,70 +227,89 @@ export default function DashboardScreen() {
             </article>
           </div>
 
-          <div className="filter-block">
-            <p className="field__label">Month</p>
-            <div className="chip-row" ref={monthRowRef}>
-              <button
-                type="button"
-                className={month === 'all' ? 'chip chip--active' : 'chip'}
-                aria-pressed={month === 'all'}
-                onClick={() => setMonth('all')}
-              >
-                All
-              </button>
-              {months.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={month === key ? 'chip chip--active' : 'chip'}
-                  aria-pressed={month === key}
-                  onClick={() => setMonth(key)}
-                >
-                  {formatMonthShort(key)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {accounts.length > 0 ? (
-            <div className="filter-block">
-              <p className="field__label">Account</p>
-              <div className="chip-row" ref={cardRowRef}>
-                <button
-                  type="button"
-                  className={accountId === 'all' ? 'chip chip--active' : 'chip'}
-                  aria-pressed={accountId === 'all'}
-                  onClick={() => setAccountId('all')}
-                >
-                  All accounts
-                </button>
-                {accounts.map((account) => (
+          <SectionCard title="Filters">
+            <div className="stack">
+              <div className="filter-block">
+                <p className="field__label">Month</p>
+                <div className="chip-row" ref={monthRowRef}>
                   <button
-                    key={account.id}
                     type="button"
-                    className={accountId === account.id ? 'chip chip--active' : 'chip'}
-                    aria-pressed={accountId === account.id}
-                    onClick={() => setAccountId(account.id)}
+                    className={month === 'all' ? 'chip chip--active' : 'chip'}
+                    aria-pressed={month === 'all'}
+                    onClick={() => setMonth('all')}
                   >
-                    {account.label}
+                    All
                   </button>
-                ))}
+                  {months.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={month === key ? 'chip chip--active' : 'chip'}
+                      aria-pressed={month === key}
+                      onClick={() => setMonth(key)}
+                    >
+                      {formatMonthShort(key)}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
 
-          <div className="dash-grid">
-            <SectionCard title="Money out by category">
-              <HorizontalBars rows={categories} />
-            </SectionCard>
-            <SectionCard title="Money out per account">
-              <HorizontalBars
-                rows={cards}
-                selectedKey={accountId === 'all' ? null : accountId}
-                onSelect={(key) => setAccountId((currentId) => (currentId === key ? 'all' : key))}
-              />
-            </SectionCard>
-          </div>
+              {accounts.length > 0 ? (
+                <div className="filter-block">
+                  <p className="field__label">Account</p>
+                  <div className="chip-row" ref={cardRowRef}>
+                    <button
+                      type="button"
+                      className={accountId === 'all' ? 'chip chip--active' : 'chip'}
+                      aria-pressed={accountId === 'all'}
+                      onClick={() => setAccountId('all')}
+                    >
+                      All accounts
+                    </button>
+                    {accounts.map((account) => (
+                      <button
+                        key={account.id}
+                        type="button"
+                        className={accountId === account.id ? 'chip chip--active' : 'chip'}
+                        aria-pressed={accountId === account.id}
+                        onClick={() => setAccountId(account.id)}
+                      >
+                        {account.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {categoryOptions.length > 0 ? (
+                <div className="filter-block">
+                  <p className="field__label">Category</p>
+                  <div className="chip-row">
+                    <button
+                      type="button"
+                      className={category === 'all' ? 'chip chip--active' : 'chip'}
+                      aria-pressed={category === 'all'}
+                      onClick={() => setCategory('all')}
+                    >
+                      All categories
+                    </button>
+                    {categoryChips.map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        className={category === label ? 'chip chip--active' : 'chip'}
+                        aria-pressed={category === label}
+                        onClick={() => setCategory(label)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+            </div>
+          </SectionCard>
 
           <SectionCard title="Money out by month">
             <MonthChart
@@ -279,34 +319,26 @@ export default function DashboardScreen() {
             />
           </SectionCard>
 
-          <SectionCard title="Categories each month">
-            <div className="stack">
-              <p className="notice">Every month in the chart, split into money out and money in.</p>
-              <MonthBreakdowns months={monthFlows} selected={selected} kind="categories" />
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Accounts each month">
-            <div className="stack">
-              <p className="notice">The same months, split by card or bank account.</p>
-              <MonthBreakdowns months={monthFlows} selected={selected} kind="accounts" />
-            </div>
-          </SectionCard>
+          <div className="dash-grid">
+            <SectionCard title="By category">
+              <HorizontalBars
+                rows={category === 'all' ? categories : categories.filter((row) => row.key === category)}
+                selectedKey={category === 'all' ? null : category}
+                onSelect={(key) => setCategory((currentCategory) => (currentCategory === key ? 'all' : key))}
+              />
+            </SectionCard>
+            <SectionCard title="By account">
+              <HorizontalBars
+                rows={cards}
+                selectedKey={accountId === 'all' ? null : accountId}
+                onSelect={(key) => setAccountId((currentId) => (currentId === key ? 'all' : key))}
+              />
+            </SectionCard>
+          </div>
 
           <SectionCard
             title="Transactions"
-            action={(
-              <label className="search">
-                <span className="sr-only">Search transactions</span>
-                <input
-                  className="input"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search merchants"
-                  type="search"
-                />
-              </label>
-            )}
+            action={<span className="section-meta">{listed.length}</span>}
           >
             <div className="stack">
               {rolledUp ? (
@@ -316,6 +348,16 @@ export default function DashboardScreen() {
                     : 'This month is a total by category and card.'}
                 </p>
               ) : null}
+              <label className="filter-block">
+                <span className="field__label">Search</span>
+                <input
+                  className="input"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Merchant, category, or account"
+                  type="search"
+                />
+              </label>
               <div className="filter-block">
                 <p className="field__label">Sort</p>
                 <div className="chip-row chip-row--wrap" role="group" aria-label="Sort transactions">
@@ -335,6 +377,20 @@ export default function DashboardScreen() {
               <TransactionList transactions={listed} />
             </div>
           </SectionCard>
+
+          <Accordion
+            title="Categories each month"
+            hint={month === 'all' ? 'All months' : formatMonthShort(primaryMonth)}
+          >
+            <MonthBreakdowns months={monthFlows} selected={selected} kind="categories" />
+          </Accordion>
+
+          <Accordion
+            title="Accounts each month"
+            hint={month === 'all' ? 'All months' : formatMonthShort(primaryMonth)}
+          >
+            <MonthBreakdowns months={monthFlows} selected={selected} kind="accounts" />
+          </Accordion>
         </>
       ) : null}
     </AppShell>

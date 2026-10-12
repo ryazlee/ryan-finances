@@ -65,7 +65,12 @@ export default function MonthChart({
           )
         })}
       </div>
-      <div className="month-chart" role="group" aria-label="Money out by month">
+      <div
+        className="month-chart"
+        role="group"
+        aria-label="Money out by month"
+        style={{ gridTemplateColumns: `repeat(${Math.max(rows.length, 1)}, minmax(0, 1fr))` }}
+      >
         {rows.map((row) => {
           const active = selected === row.key
           const dim = selected !== null && !active

@@ -1,5 +1,6 @@
 import { Landmark } from 'lucide-react'
 import { useState } from 'react'
+import Accordion from '../Accordion'
 import AppHeader from '../AppHeader'
 import AppShell from '../AppShell'
 import Button from '../Button'
@@ -158,7 +159,7 @@ export default function ConnectScreen() {
           )}
         </SectionCard>
 
-        <SectionCard title="Categories">
+        <Accordion title="How categories work">
           <div className="stack">
             <p className="notice">
               The Rules tab maps a merchant, name, or Plaid category onto your label. Lower priority numbers win.
@@ -171,7 +172,7 @@ export default function ConnectScreen() {
               Money out and money in include purchases, paychecks, Venmo, rent, and brokerage moves. Card payments, internal transfers, and pending rows stay out of those totals.
             </p>
           </div>
-        </SectionCard>
+        </Accordion>
           </>
         ) : null}
       </div>
