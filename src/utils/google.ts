@@ -2,12 +2,21 @@ export type GoogleCredentialResponse = {
   credential: string
 }
 
+export type PromptMoment = {
+  isNotDisplayed: () => boolean
+  isSkippedMoment: () => boolean
+  isDismissedMoment: () => boolean
+}
+
 type GoogleId = {
   initialize: (config: {
     client_id: string
     callback: (response: GoogleCredentialResponse) => void
     auto_select?: boolean
+    color_scheme?: 'light' | 'dark'
+    use_fedcm_for_prompt?: boolean
   }) => void
+  prompt: (listener?: (moment: PromptMoment) => void) => void
   renderButton: (parent: HTMLElement, options: Record<string, string | number>) => void
   disableAutoSelect: () => void
 }

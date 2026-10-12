@@ -282,6 +282,10 @@ a {
   background: color-mix(in srgb, var(--text) 3%, var(--surface));
 }
 
+.btn--block {
+  width: 100%;
+}
+
 .btn--ghost {
   background: transparent;
   color: var(--text-secondary);
