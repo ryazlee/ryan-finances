@@ -38,7 +38,7 @@ Create a KV namespace and replace the placeholder id in `wrangler.jsonc`:
 npx wrangler kv namespace create TOKENS
 ```
 
-Pushes to `main` deploy through `.github/workflows/deploy.yaml`. Pull requests run tests and the build only. In the GitHub repo, add two Actions secrets:
+The site you open is [https://ryazlee.github.io/ryan-finances/](https://ryazlee.github.io/ryan-finances/). Pushes to `main` publish that GitHub Pages site and the Cloudflare Worker that syncs banks. Pull requests run tests and the Pages build only. In the GitHub repo, add two Actions secrets:
 
 - `CLOUDFLARE_API_TOKEN` — a token with Workers Scripts edit on this account
 - `CLOUDFLARE_ACCOUNT_ID` — the account id from the Cloudflare dashboard
@@ -59,7 +59,7 @@ The cron is `0 13 * * *` (13:00 UTC).
 
 ### Cloudflare Access (Google login)
 
-The site has no login of its own. Cloudflare Access sits in front of the hostname and requires your Google account before any page or `/api` response loads. Do this before you link a real bank. The daily cron is not a browser request, so it still runs.
+GitHub Pages is a public static site, so Cloudflare Access cannot sit in front of it. Access can still wrap the Worker at `finance-tracker.ryazlee.workers.dev`. Do that before you link a real bank if the transaction API should require your Google account. The daily cron is not a browser request, so it still runs. The Pages dashboard calls that Worker, so locking the Worker with Access also blocks the Pages site from loading data.
 
 1. Zero Trust → Settings → Authentication → Add Google. Cloudflare shows a redirect URL. In Google Cloud, create an OAuth client (Web application) with that redirect URL, and paste the client id and secret back into Cloudflare.
 2. Access → Applications → Self-hosted. Domain is the Worker hostname (`something.workers.dev` or your custom domain). Leave the path open so `/` and `/api` are both covered.

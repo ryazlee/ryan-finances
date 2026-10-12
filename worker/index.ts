@@ -7,7 +7,7 @@ import {
   sheetId,
   type Env,
 } from './env'
-import { json, originAllowed, readJson } from './http'
+import { corsHeaders, json, originAllowed, readJson } from './http'
 import { readItems, writeItems } from './items'
 import { buildSnapshot } from './sheet'
 import { syncAll } from './sync'
@@ -29,15 +29,15 @@ async function institutionName(env: Env, accessToken: string): Promise<string> {
   }
 }
 
-function requireReady(env: Env): Response | null {
+function requireReady(request: Request, env: Env): Response | null {
   if (!sheetId(env) || !googleCredentials(env)) {
-    return json({ error: 'Add the Google Sheet id and service account before linking a bank.', missing: missingSecrets(env) }, 400)
+    return json({ error: 'Add the Google Sheet id and service account before linking a bank.', missing: missingSecrets(env) }, 400, request)
   }
   if (!env.PLAID_CLIENT_ID?.trim() || !env.PLAID_SECRET?.trim()) {
-    return json({ error: 'Add Plaid keys before linking a bank.', missing: missingSecrets(env) }, 400)
+    return json({ error: 'Add Plaid keys before linking a bank.', missing: missingSecrets(env) }, 400, request)
   }
   if (!plaidEnvironment(env)) {
-    return json({ error: 'Plaid Development was retired. Set PLAID_ENV to sandbox or production.' }, 400)
+    return json({ error: 'Plaid Development was retired. Set PLAID_ENV to sandbox or production.' }, 400, request)
   }
   return null
 }
@@ -46,19 +46,25 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const { pathname } = url
 
+  if (request.method === 'OPTIONS') {
+    if (!originAllowed(request)) return json({ error: 'Cross-origin request blocked.' }, 403, request)
+    return new Response(null, { status: 204, headers: corsHeaders(request) })
+  }
+
+  if (!originAllowed(request)) {
+    return json({ error: 'Cross-origin request blocked.' }, 403, request)
+  }
+
   if (request.method === 'GET' && pathname === '/api/snapshot') {
-    return json(await buildSnapshot(env))
+    return json(await buildSnapshot(env), 200, request)
   }
 
   if (request.method !== 'POST') {
-    return json({ error: 'Not found.' }, 404)
-  }
-  if (!originAllowed(request)) {
-    return json({ error: 'Cross-origin request blocked.' }, 403)
+    return json({ error: 'Not found.' }, 404, request)
   }
 
   if (pathname === '/api/link/token') {
-    const blocked = requireReady(env)
+    const blocked = requireReady(request, env)
     if (blocked) return blocked
     const created = await plaid<{ link_token: string }>(env, '/link/token/create', {
       client_name: 'Purchase Tracker',
@@ -68,16 +74,16 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       products: ['transactions'],
       transactions: { days_requested: 730 },
     })
-    return json({ link_token: created.link_token })
+    return json({ link_token: created.link_token }, 200, request)
   }
 
   if (pathname === '/api/link/exchange') {
-    const blocked = requireReady(env)
+    const blocked = requireReady(request, env)
     if (blocked) return blocked
     const body = (await readJson(request)) as { public_token?: unknown }
     const publicToken = body.public_token
     if (typeof publicToken !== 'string' || !publicToken.startsWith('public-')) {
-      return json({ error: 'Missing a Plaid public token.' }, 400)
+      return json({ error: 'Missing a Plaid public token.' }, 400, request)
     }
     const exchanged = await plaid<{ access_token: string; item_id: string }>(
       env,
@@ -107,17 +113,17 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       institution,
       sync,
       syncError,
-    })
+    }, 200, request)
   }
 
   if (pathname === '/api/sync') {
-    const blocked = requireReady(env)
+    const blocked = requireReady(request, env)
     if (blocked) return blocked
     const sync = await syncAll(env)
-    return json(sync)
+    return json(sync, 200, request)
   }
 
-  return json({ error: 'Not found.' }, 404)
+  return json({ error: 'Not found.' }, 404, request)
 }
 
 export default {
@@ -130,7 +136,7 @@ export default {
       return env.ASSETS.fetch(request)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Request failed.'
-      if (url.pathname.startsWith('/api/')) return json({ error: message }, 500)
+      if (url.pathname.startsWith('/api/')) return json({ error: message }, 500, request)
       return new Response(message, { status: 500 })
     }
   },

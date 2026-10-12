@@ -1,11 +1,25 @@
-export function json(data: unknown, status = 200): Response {
+const PAGES_ORIGIN = 'https://ryazlee.github.io'
+
+export function json(data: unknown, status = 200, request?: Request): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
+      ...(request ? corsHeaders(request) : {}),
     },
   })
+}
+
+export function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('origin')
+  if (!origin || origin === new URL(request.url).origin || !originAllowed(request)) return {}
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+    vary: 'Origin',
+  }
 }
 
 export function originAllowed(request: Request): boolean {
@@ -19,6 +33,7 @@ export function originAllowed(request: Request): boolean {
   }
   const host = parsed.hostname
   if (host === 'localhost' || host === '127.0.0.1') return true
+  if (origin === PAGES_ORIGIN) return true
   return origin === new URL(request.url).origin
 }
 
