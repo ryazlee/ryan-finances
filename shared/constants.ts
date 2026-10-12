@@ -54,7 +54,11 @@ export const SHEET_TABS = {
   archived: 'Archived',
 } as const
 
-/** Exact category names that are not purchases. Edit a rule if a loan payment should count. */
+/**
+ * Category names left out of everyday spending.
+ * Payment and Transfer still count when the row is Venmo, rent, or brokerage activity.
+ * Income stays out of money-out totals and counts as money in.
+ */
 export const EXCLUDED_SPEND = new Set(['transfer', 'payment', 'income'])
 
 export const RULE_FIELDS: RuleField[] = ['name', 'merchant', 'plaid_category']

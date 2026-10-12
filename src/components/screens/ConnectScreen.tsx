@@ -168,7 +168,7 @@ export default function ConnectScreen() {
               The next sync updates everything else and leaves that cell alone. An override wins over rules.
             </p>
             <p className="notice">
-              Spend charts skip categories named Payment, Transfer, and Income, plus pending rows.
+              Money out and money in include purchases, paychecks, Venmo, rent, and brokerage moves. Card payments, internal transfers, and pending rows stay out of those totals.
             </p>
           </div>
         </SectionCard>

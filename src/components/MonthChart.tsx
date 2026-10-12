@@ -21,14 +21,51 @@ export default function MonthChart({
   onSelect: (month: string) => void
 }) {
   const max = Math.max(...rows.map((row) => Math.sqrt(row.amount)), 1)
+  const peak = Math.max(...rows.map((row) => row.amount), 1)
   const legend = new Map<string, string>()
   for (const row of rows) {
     for (const part of row.parts) legend.set(part.key, part.label)
   }
 
+  const newestFirst = [...rows].reverse()
+
   return (
     <div>
-      <div className="month-chart" role="group" aria-label="Spend by month">
+      <div className="month-list" role="group" aria-label="Money out by month">
+        {newestFirst.filter((row) => row.amount > 0 || selected === row.key).map((row) => {
+          const active = selected === row.key
+          const dim = selected !== null && !active
+          const width = row.amount <= 0 ? 0 : Math.max(6, (row.amount / peak) * 100)
+          return (
+            <button
+              key={row.key}
+              type="button"
+              className={[
+                'month-list__row',
+                active ? 'month-list__row--active' : '',
+                dim ? 'month-list__row--dim' : '',
+              ].filter(Boolean).join(' ')}
+              aria-pressed={active}
+              onClick={() => onSelect(row.key)}
+            >
+              <span className="month-list__name">{formatMonthShort(row.key)}</span>
+              <span className="month-list__track">
+                <span className="month-list__fill" style={{ width: `${width}%` }}>
+                  {row.parts.map((part) => (
+                    <span
+                      key={part.key}
+                      className="month-list__seg"
+                      style={{ flexGrow: part.amount, background: categoryColor(part.key) }}
+                    />
+                  ))}
+                </span>
+              </span>
+              <span className="month-list__amount">{row.amount > 0 ? formatMoney(row.amount) : '$0'}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="month-chart" role="group" aria-label="Money out by month">
         {rows.map((row) => {
           const active = selected === row.key
           const dim = selected !== null && !active

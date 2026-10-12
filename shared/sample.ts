@@ -72,6 +72,10 @@ export function buildSampleSnapshot(now = new Date()): Snapshot {
     row({ id: 's16', account: checking, days: 50, name: 'Payroll', amount: -2400, category: 'Income', plaidCategory: 'INCOME' }),
     row({ id: 's17', account: sapphire, days: 70, name: 'CVS', amount: 22.41, category: 'Health', plaidCategory: 'MEDICAL' }),
     row({ id: 's18', account: freedom, days: 95, name: 'AMC', amount: 32, category: 'Entertainment', plaidCategory: 'ENTERTAINMENT' }),
+    row({ id: 's19', account: checking, days: 1, name: 'VENMO PAYMENT', merchant: 'Venmo', amount: 42, category: 'Transfer', plaidCategory: 'TRANSFER_OUT' }),
+    row({ id: 's20', account: checking, days: 2, name: 'Venmo cashout', merchant: 'Venmo', amount: -28.5, category: 'Transfer', plaidCategory: 'TRANSFER_IN' }),
+    row({ id: 's21', account: checking, days: 3, name: 'Apartment rent', merchant: 'Landlord', amount: 1850, category: 'Transfer', plaidCategory: 'TRANSFER_OUT' }),
+    row({ id: 's22', account: checking, days: 4, name: 'Schwab Brokerage', merchant: 'Charles Schwab', amount: 400, category: 'Transfer', plaidCategory: 'TRANSFER_OUT' }),
   ]
 
   return {

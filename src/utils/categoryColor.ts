@@ -12,6 +12,8 @@ const NAMED: Record<string, string> = {
   health: '#6d8578',
   entertainment: '#7a6e86',
   income: '#5f8f72',
+  venmo: '#0057b8',
+  investments: '#3f4c5a',
   payment: '#71717a',
   transfer: '#71717a',
   other: '#71717a',

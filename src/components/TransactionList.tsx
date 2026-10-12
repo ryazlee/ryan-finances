@@ -1,3 +1,4 @@
+import { isInvestmentActivity, isRentActivity, isVenmo } from '../../shared/categorize'
 import { isRolledUp } from '../../shared/condense'
 import type { Transaction } from '../../shared/types'
 import { formatDay, formatMoney, formatMonth } from '../utils/format'
@@ -32,10 +33,18 @@ export default function TransactionList({ transactions }: { transactions: Transa
           <div>
             {rows.map((tx) => {
               const inflow = tx.amount < 0
+              const venmo = isVenmo(tx)
+              const rent = !venmo && isRentActivity(tx)
+              const brokerage = !venmo && !rent && isInvestmentActivity(tx)
               return (
-                <article className="tx" key={tx.id}>
+                <article className={venmo ? 'tx tx--venmo' : 'tx'} key={tx.id}>
                   <div className="tx__copy">
-                    <div className="tx__name">{tx.merchant || tx.name}</div>
+                    <div className="tx__name">
+                      <span className="tx__name-text">{tx.merchant || tx.name}</span>
+                      {venmo ? <span className="badge badge--venmo">Venmo</span> : null}
+                      {rent ? <span className="badge badge--rent">Rent</span> : null}
+                      {brokerage ? <span className="badge badge--broker">Brokerage</span> : null}
+                    </div>
                     <p className="tx__meta">
                       <span>{tx.category}</span>
                       <span aria-hidden="true">·</span>
@@ -45,7 +54,8 @@ export default function TransactionList({ transactions }: { transactions: Transa
                     </p>
                   </div>
                   <div className={inflow ? 'tx__amount tx__amount--in' : 'tx__amount'}>
-                    {inflow ? `+${formatMoney(Math.abs(tx.amount))}` : formatMoney(tx.amount)}
+                    <span className="tx__way">{inflow ? 'In' : 'Out'}</span>
+                    <span>{inflow ? `+${formatMoney(Math.abs(tx.amount))}` : formatMoney(tx.amount)}</span>
                   </div>
                 </article>
               )

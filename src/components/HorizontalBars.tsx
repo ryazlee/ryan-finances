@@ -11,7 +11,7 @@ export default function HorizontalBars({
   onSelect?: (key: string) => void
 }) {
   if (rows.length === 0) {
-    return <p className="notice">No spend in this period.</p>
+    return <p className="notice">No money out in this period.</p>
   }
 
   const max = Math.max(...rows.map((row) => row.amount), 1)

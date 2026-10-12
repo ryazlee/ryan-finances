@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { categorize, countsAsSpend } from './categorize.ts'
+import { categorize, countsAsInflow, countsAsSpend, flowCategory, isVenmo } from './categorize.ts'
 import type { Rule } from './types.ts'
 
 const rules: Rule[] = [
@@ -87,5 +87,54 @@ describe('countsAsSpend', () => {
     assert.equal(countsAsSpend({ ...base, pending: true }), false)
     assert.equal(countsAsSpend({ ...base, amount: -20 }), false)
     assert.equal(countsAsSpend({ ...base, removed: true }), false)
+  })
+
+  it('counts venmo, rent, and brokerage even when Plaid calls them transfers', () => {
+    const venmoOut = { ...base, category: 'Transfer', name: 'VENMO PAYMENT', merchant: 'Venmo' }
+    assert.equal(countsAsSpend(venmoOut), true)
+    assert.equal(flowCategory(venmoOut), 'Venmo')
+    const venmoIn = { ...venmoOut, amount: -15 }
+    assert.equal(countsAsSpend(venmoIn), false)
+    assert.equal(countsAsInflow(venmoIn), true)
+
+    const rent = { ...base, category: 'Transfer', name: 'Apartment rent', merchant: 'Landlord' }
+    assert.equal(countsAsSpend(rent), true)
+    assert.equal(flowCategory(rent), 'Rent')
+
+    const stock = { ...base, category: 'Transfer', name: 'Schwab Brokerage', merchant: 'Charles Schwab' }
+    assert.equal(countsAsSpend(stock), true)
+    assert.equal(flowCategory(stock), 'Investments')
+    assert.equal(countsAsInflow({ ...stock, amount: -80 }), true)
+  })
+
+  it('still skips card payments, internal transfers, and car rentals', () => {
+    assert.equal(
+      countsAsSpend({ ...base, category: 'Payment', name: 'Payment thank you', merchant: 'Chase' }),
+      false,
+    )
+    assert.equal(
+      countsAsSpend({ ...base, category: 'Transfer', name: 'Online transfer', merchant: 'Bank' }),
+      false,
+    )
+    assert.equal(
+      countsAsInflow({ ...base, amount: -40, category: 'Transfer', name: 'Online transfer', merchant: 'Bank' }),
+      false,
+    )
+    assert.equal(
+      countsAsSpend({ ...base, category: 'Transfer', name: 'Enterprise Rent-A-Car', merchant: 'Enterprise' }),
+      false,
+    )
+  })
+
+  it('counts paychecks as money in', () => {
+    const paycheck = { ...base, amount: -2400, category: 'Income', name: 'Payroll', merchant: 'Payroll' }
+    assert.equal(countsAsSpend(paycheck), false)
+    assert.equal(countsAsInflow(paycheck), true)
+    assert.equal(flowCategory(paycheck), 'Income')
+  })
+
+  it('detects venmo from the merchant or name', () => {
+    assert.equal(isVenmo({ name: 'venmo cashout', merchant: '' }), true)
+    assert.equal(isVenmo({ name: 'Coffee', merchant: 'Blue Bottle' }), false)
   })
 })

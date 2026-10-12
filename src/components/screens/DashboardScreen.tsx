@@ -1,6 +1,15 @@
 import { Landmark, RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { spendByAccount, spendByCategory, spendByMonthStacked, spendInMonth, transactionCount } from '../../../shared/aggregate'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  breakdownByMonth,
+  inflowInMonth,
+  inflowTotal,
+  outflowTotal,
+  spendByAccount,
+  spendByCategory,
+  spendByMonthStacked,
+  transactionCount,
+} from '../../../shared/aggregate'
 import { isRolledUp } from '../../../shared/condense'
 import { DETAIL_MONTHS } from '../../../shared/constants'
 import { recentMonths, shiftMonth } from '../../../shared/months'
@@ -9,6 +18,7 @@ import AppShell from '../AppShell'
 import Button from '../Button'
 import HorizontalBars from '../HorizontalBars'
 import MakerCredit from '../MakerCredit'
+import MonthBreakdowns from '../MonthBreakdowns'
 import MonthChart from '../MonthChart'
 import SectionCard from '../SectionCard'
 import SignOutButton from '../SignOutButton'
@@ -26,8 +36,16 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'oldest', label: 'Oldest' },
   { key: 'high', label: 'Highest' },
   { key: 'low', label: 'Lowest' },
-  { key: 'account', label: 'Card' },
+  { key: 'account', label: 'Account' },
 ]
+
+function centerActiveChip(row: HTMLDivElement | null) {
+  if (!row) return
+  const active = row.querySelector<HTMLElement>('.chip--active')
+  if (!active) return
+  const left = active.offsetLeft - row.clientWidth / 2 + active.clientWidth / 2
+  row.scrollTo({ left: Math.max(0, left) })
+}
 
 function compareTransactions(sort: SortKey, a: Transaction, b: Transaction): number {
   if (sort === 'oldest') return a.date.localeCompare(b.date) || b.amount - a.amount
@@ -48,6 +66,8 @@ export default function DashboardScreen() {
   const [accountId, setAccountId] = useState('all')
   const [sort, setSort] = useState<SortKey>('newest')
   const [query, setQuery] = useState('')
+  const monthRowRef = useRef<HTMLDivElement>(null)
+  const cardRowRef = useRef<HTMLDivElement>(null)
 
   const transactions = view?.transactions ?? []
   const accounts = useMemo(() => {
@@ -69,9 +89,12 @@ export default function DashboardScreen() {
   const categories = spendByCategory(scoped, selected)
   const cards = spendByAccount(transactions, selected)
   const byMonth = spendByMonthStacked(scoped, months)
+  const monthFlows = breakdownByMonth(scoped, months)
   const primaryMonth = month === 'all' ? current : month
-  const primarySpend = spendInMonth(scoped, primaryMonth)
-  const priorSpend = spendInMonth(scoped, shiftMonth(primaryMonth, -1))
+  const periodOut = outflowTotal(scoped, selected)
+  const periodIn = inflowTotal(scoped, selected)
+  const priorOut = outflowTotal(scoped, shiftMonth(primaryMonth, -1))
+  const priorIn = inflowInMonth(scoped, shiftMonth(primaryMonth, -1))
   const periodTransactions = scoped.filter((tx) => month === 'all' || tx.date.startsWith(month))
   const rolledUp = periodTransactions.some(isRolledUp)
   const queryText = query.trim().toLowerCase()
@@ -85,8 +108,16 @@ export default function DashboardScreen() {
     .sort((a, b) => compareTransactions(sort, a, b))
   const hasRows = usingSample || transactions.length > 0
   const synced = formatSynced(view?.syncedAt ?? null)
-  const delta = priorSpend > 0 ? Math.round(((primarySpend - priorSpend) / priorSpend) * 100) : null
+  const delta = month !== 'all' && priorOut > 0 ? Math.round(((periodOut - priorOut) / priorOut) * 100) : null
   const versus = delta == null ? null : `${delta > 0 ? '+' : ''}${delta}% vs prior month`
+
+  useEffect(() => {
+    centerActiveChip(monthRowRef.current)
+  }, [month, hasRows])
+
+  useEffect(() => {
+    centerActiveChip(cardRowRef.current)
+  }, [accountId, hasRows, accounts.length])
 
   return (
     <AppShell
@@ -154,19 +185,19 @@ export default function DashboardScreen() {
       {hasRows ? (
         <>
           <div className="stat-grid">
-            <article className="surface-card stat">
-              <p className="stat__label">{month === 'all' ? 'This month' : formatMonth(primaryMonth)}</p>
-              <p className="stat__value">{formatMoney(primarySpend)}</p>
+            <article className="surface-card stat stat--lead">
+              <p className="stat__label">Money out{month === 'all' ? '' : ` · ${formatMonthShort(primaryMonth)}`}</p>
+              <p className="stat__value">{formatMoney(periodOut)}</p>
               {versus ? (
                 <p className={delta != null && delta > 0 ? 'stat__meta stat__meta--up' : 'stat__meta stat__meta--down'}>{versus}</p>
               ) : (
-                <p className="stat__meta">Spend, excluding payments</p>
+                <p className="stat__meta">{month === 'all' ? 'All months' : formatMonth(primaryMonth)}</p>
               )}
             </article>
-            <article className="surface-card stat">
-              <p className="stat__label">Prior month</p>
-              <p className="stat__value">{formatMoney(priorSpend)}</p>
-              <p className="stat__meta">{formatMonth(shiftMonth(primaryMonth, -1))}</p>
+            <article className="surface-card stat stat--in">
+              <p className="stat__label">Money in{month === 'all' ? '' : ` · ${formatMonthShort(primaryMonth)}`}</p>
+              <p className="stat__value">{formatMoney(periodIn)}</p>
+              <p className="stat__meta">{month === 'all' ? 'All months' : `Prior month ${formatMoney(priorIn)}`}</p>
             </article>
             <article className="surface-card stat">
               <p className="stat__label">Transactions</p>
@@ -177,7 +208,7 @@ export default function DashboardScreen() {
 
           <div className="filter-block">
             <p className="field__label">Month</p>
-            <div className="chip-row">
+            <div className="chip-row" ref={monthRowRef}>
               <button
                 type="button"
                 className={month === 'all' ? 'chip chip--active' : 'chip'}
@@ -202,15 +233,15 @@ export default function DashboardScreen() {
 
           {accounts.length > 0 ? (
             <div className="filter-block">
-              <p className="field__label">Card</p>
-              <div className="chip-row">
+              <p className="field__label">Account</p>
+              <div className="chip-row" ref={cardRowRef}>
                 <button
                   type="button"
                   className={accountId === 'all' ? 'chip chip--active' : 'chip'}
                   aria-pressed={accountId === 'all'}
                   onClick={() => setAccountId('all')}
                 >
-                  All cards
+                  All accounts
                 </button>
                 {accounts.map((account) => (
                   <button
@@ -228,10 +259,10 @@ export default function DashboardScreen() {
           ) : null}
 
           <div className="dash-grid">
-            <SectionCard title="Spend by category">
+            <SectionCard title="Money out by category">
               <HorizontalBars rows={categories} />
             </SectionCard>
-            <SectionCard title="Per card">
+            <SectionCard title="Money out per account">
               <HorizontalBars
                 rows={cards}
                 selectedKey={accountId === 'all' ? null : accountId}
@@ -240,7 +271,7 @@ export default function DashboardScreen() {
             </SectionCard>
           </div>
 
-          <SectionCard title="Expenditure over months">
+          <SectionCard title="Money out by month">
             <MonthChart
               rows={byMonth}
               selected={selected}
@@ -248,8 +279,22 @@ export default function DashboardScreen() {
             />
           </SectionCard>
 
+          <SectionCard title="Categories each month">
+            <div className="stack">
+              <p className="notice">Every month in the chart, split into money out and money in.</p>
+              <MonthBreakdowns months={monthFlows} selected={selected} kind="categories" />
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Accounts each month">
+            <div className="stack">
+              <p className="notice">The same months, split by card or bank account.</p>
+              <MonthBreakdowns months={monthFlows} selected={selected} kind="accounts" />
+            </div>
+          </SectionCard>
+
           <SectionCard
-            title="What you bought"
+            title="Transactions"
             action={(
               <label className="search">
                 <span className="sr-only">Search transactions</span>
@@ -267,13 +312,13 @@ export default function DashboardScreen() {
               {rolledUp ? (
                 <p className="notice">
                   {month === 'all'
-                    ? `Individual purchases stay for this month and the ${DETAIL_MONTHS} before it. Older months are totals by category and card.`
-                    : 'This month is stored as totals by category and card.'}
+                    ? `Months older than ${DETAIL_MONTHS} months are totals by category and card.`
+                    : 'This month is a total by category and card.'}
                 </p>
               ) : null}
               <div className="filter-block">
                 <p className="field__label">Sort</p>
-                <div className="chip-row" role="group" aria-label="Sort transactions">
+                <div className="chip-row chip-row--wrap" role="group" aria-label="Sort transactions">
                   {SORTS.map((option) => (
                     <button
                       key={option.key}
