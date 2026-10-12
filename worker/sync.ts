@@ -1,11 +1,15 @@
+import { condenseRows, mergeSummaries } from '../shared/condense'
+import { oldestOpenMonth } from '../shared/months'
 import type { Account, SyncCounts } from '../shared/types'
 import { plaid } from './clients'
 import type { Env } from './env'
 import { readItems, writeItems, type StoredItem } from './items'
 import {
   ensureWorkbook,
+  readArchivedIds,
   readWorkbook,
   writeAccounts,
+  writeFold,
   writeTransactions,
   type StoredTransaction,
 } from './sheet'
@@ -44,7 +48,9 @@ function applyTransaction(
   rows: Map<string, StoredTransaction>,
   tx: PlaidTransaction,
   accounts: Map<string, PlaidAccount>,
-): void {
+  archived: Set<string>,
+): boolean {
+  if (archived.has(tx.transaction_id)) return false
   const account = accounts.get(tx.account_id)
   const existing = rows.get(tx.transaction_id)
   const pendingSource = tx.pending_transaction_id ? rows.get(tx.pending_transaction_id) : undefined
@@ -63,6 +69,7 @@ function applyTransaction(
     categoryOverride: existing?.categoryOverride || pendingSource?.categoryOverride || '',
     removed: false,
   })
+  return true
 }
 
 async function pullItem(
@@ -71,6 +78,7 @@ async function pullItem(
   rows: Map<string, StoredTransaction>,
   accounts: Account[],
   syncedAt: string,
+  archived: Set<string>,
 ): Promise<{ added: number; modified: number; removed: number; cursor: string | null }> {
   const accountResponse = await plaid<{ accounts: PlaidAccount[] }>(env, '/accounts/get', {
     access_token: item.accessToken,
@@ -108,14 +116,13 @@ async function pullItem(
       ...(cursor ? { cursor } : {}),
     })
     for (const tx of page.added ?? []) {
-      added += 1
-      applyTransaction(rows, tx, byId)
+      if (applyTransaction(rows, tx, byId, archived)) added += 1
     }
     for (const tx of page.modified ?? []) {
-      modified += 1
-      applyTransaction(rows, tx, byId)
+      if (applyTransaction(rows, tx, byId, archived)) modified += 1
     }
     for (const tx of page.removed ?? []) {
+      if (archived.has(tx.transaction_id)) continue
       const existing = rows.get(tx.transaction_id)
       if (existing && !existing.removed) {
         existing.removed = true
@@ -131,10 +138,16 @@ async function pullItem(
 }
 
 export async function syncAll(env: Env): Promise<SyncCounts> {
-  await ensureWorkbook(env)
   const items = await readItems(env)
-  const workbook = await readWorkbook(env)
-  const rows = new Map(workbook.transactions.map((row) => [row.id, row]))
+  if (items.length === 0) {
+    return { added: 0, modified: 0, removed: 0, accounts: 0 }
+  }
+  await ensureWorkbook(env)
+  const [workbook, archived] = await Promise.all([readWorkbook(env), readArchivedIds(env)])
+  const rows = new Map<string, StoredTransaction>()
+  for (const row of workbook.transactions) {
+    if (!archived.ids.has(row.id)) rows.set(row.id, row)
+  }
   const accounts: Account[] = []
   const syncedAt = new Date().toISOString()
   let added = 0
@@ -142,14 +155,25 @@ export async function syncAll(env: Env): Promise<SyncCounts> {
   let removed = 0
 
   for (const item of items) {
-    const result = await pullItem(env, item, rows, accounts, syncedAt)
+    const result = await pullItem(env, item, rows, accounts, syncedAt, archived.ids)
     item.cursor = result.cursor
     added += result.added
     modified += result.modified
     removed += result.removed
   }
 
-  const ordered = [...rows.values()].sort(
+  const folded = condenseRows([...rows.values()], workbook.rules, oldestOpenMonth())
+  if (folded.archivedIds.length > 0) {
+    await writeFold(
+      env,
+      mergeSummaries(workbook.summaries, folded.summaries),
+      workbook.summaryRows,
+      folded.archivedIds,
+      archived.rows,
+    )
+  }
+
+  const ordered = folded.kept.sort(
     (a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id),
   )
   await writeTransactions(env, ordered, workbook.rules, workbook.transactionRows)

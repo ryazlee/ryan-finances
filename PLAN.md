@@ -29,7 +29,9 @@ Manual **Sync** hits `POST /api/sync`. Linking a bank syncs immediately.
 
 | Tab | Who edits it | Columns that matter |
 |---|---|---|
-| Transactions | Sync writes these. You may set `category_override`. | `category_override` is kept. `category` is rewritten. |
+| Transactions | Sync writes these. You may set `category_override`. | `category_override` is kept. `category` is rewritten. The current month and the three before it stay here. |
+| Monthly | Sync, once a month is older than that | One row per month, card, category, and direction (`out` spend or `in` refund). The category is frozen. |
+| Archived | Sync only | Ids already folded into Monthly. Leave this tab in place. |
 | Rules | You | `priority`, `field` (`name`, `merchant`, or `plaid_category`), `pattern`, `category`. Lower priority number wins. Match is a case-insensitive substring. |
 | Accounts | Sync only | Institution, name, mask. No tokens. |
 

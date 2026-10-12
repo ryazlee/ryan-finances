@@ -50,6 +50,10 @@ export function spendInMonth(transactions: Transaction[], month: string): number
   return spendTransactions(transactions, month).reduce((sum, tx) => sum + tx.amount, 0)
 }
 
+export function transactionCount(transactions: Transaction[]): number {
+  return transactions.reduce((sum, tx) => sum + (tx.count ?? 1), 0)
+}
+
 export function spendByMonth(transactions: Transaction[], months: string[]): AmountRow[] {
   return months.map((month) => ({
     key: month,

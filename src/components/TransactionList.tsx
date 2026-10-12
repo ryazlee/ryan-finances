@@ -1,5 +1,6 @@
+import { isRolledUp } from '../../shared/condense'
 import type { Transaction } from '../../shared/types'
-import { formatDay, formatMoney } from '../utils/format'
+import { formatDay, formatMoney, formatMonth } from '../utils/format'
 
 const VISIBLE_LIMIT = 200
 
@@ -25,7 +26,9 @@ export default function TransactionList({ transactions }: { transactions: Transa
     <div className="tx-groups">
       {groupByDate(visible).map(([date, rows]) => (
         <section key={date} className="tx-group">
-          <h3 className="tx-group__date">{formatDay(date)}</h3>
+          <h3 className="tx-group__date">
+            {rows.every(isRolledUp) ? formatMonth(date.slice(0, 7)) : formatDay(date)}
+          </h3>
           <div>
             {rows.map((tx) => {
               const inflow = tx.amount < 0

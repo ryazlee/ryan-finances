@@ -4,13 +4,14 @@ import { api } from '../utils/api'
 import { useSnapshot } from './snapshot'
 
 export function useSync() {
-  const { remote, refresh } = useSnapshot()
+  const { remote, refresh, refreshingBanks, bankError } = useSnapshot()
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const enabled = Boolean(remote?.sheetConfigured && remote.plaidConfigured)
 
   const sync = useCallback(async () => {
+    if (refreshingBanks) return
     setSyncing(true)
     try {
       const result = await api<SyncCounts>('/api/sync', { method: 'POST' })
@@ -23,7 +24,13 @@ export function useSync() {
     } finally {
       setSyncing(false)
     }
-  }, [refresh])
+  }, [refresh, refreshingBanks])
 
-  return { sync, syncing, message, failed, enabled }
+  return {
+    sync,
+    syncing: syncing || refreshingBanks,
+    message: message ?? bankError,
+    failed: failed || Boolean(bankError && !message),
+    enabled,
+  }
 }

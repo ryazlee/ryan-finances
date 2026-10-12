@@ -30,10 +30,28 @@ export const ACCOUNT_HEADERS = [
   'last_synced',
 ] as const
 
+export const MONTHLY_HEADERS = [
+  'month',
+  'account_id',
+  'account_name',
+  'mask',
+  'category',
+  'direction',
+  'amount',
+  'count',
+] as const
+
+export const ARCHIVE_HEADERS = ['transaction_id'] as const
+
+/** Current month plus this many previous months stay as individual purchases. */
+export const DETAIL_MONTHS = 3
+
 export const SHEET_TABS = {
   transactions: 'Transactions',
   rules: 'Rules',
   accounts: 'Accounts',
+  monthly: 'Monthly',
+  archived: 'Archived',
 } as const
 
 /** Exact category names that are not purchases. Edit a rule if a loan payment should count. */

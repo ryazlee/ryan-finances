@@ -12,7 +12,7 @@ import { formatSynced } from '../../utils/format'
 import { loadPlaid, openPlaidLink } from '../../utils/plaidLink'
 
 export default function ConnectScreen() {
-  const { remote, loading, error, refresh } = useSnapshot()
+  const { remote, loading, error, refreshingBanks, refresh } = useSnapshot()
   const { sync, syncing, message, failed, enabled } = useSync()
   const [linking, setLinking] = useState(false)
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
@@ -97,7 +97,12 @@ export default function ConnectScreen() {
                   ? `Plaid keys are set (${remote.plaidEnv}).`
                   : 'Plaid keys are not set.'}
               </li>
-              <li>{accounts.length ? `${accounts.length} linked account${accounts.length === 1 ? '' : 's'}.` : 'No banks linked yet.'}</li>
+              <li>
+                {remote.linkedItems
+                  ? `${remote.linkedItems} saved Plaid connection${remote.linkedItems === 1 ? '' : 's'}.`
+                  : 'No banks linked yet.'}
+              </li>
+              <li>{accounts.length ? `${accounts.length} linked account${accounts.length === 1 ? '' : 's'}.` : 'No accounts fetched yet.'}</li>
             </ul>
             {remote?.serviceAccountEmail ? (
               <p className="notice">
@@ -107,6 +112,7 @@ export default function ConnectScreen() {
             {remote?.missing.length ? (
               <p className="notice">Still needed: {remote.missing.join(', ')}</p>
             ) : null}
+            {refreshingBanks ? <p className="notice">Fetching your banks…</p> : null}
             {linkMessage ? <p className={linkFailed ? 'notice notice--error' : 'notice'}>{linkMessage}</p> : null}
             {message ? <p className={failed ? 'notice notice--error' : 'notice'}>{message}</p> : null}
             <div className="action-row">
@@ -118,7 +124,7 @@ export default function ConnectScreen() {
               />
               {enabled ? (
                 <Button
-                  label={syncing ? 'Syncing…' : 'Sync now'}
+                  label={syncing ? 'Fetching…' : 'Sync now'}
                   variant="secondary"
                   onClick={() => void sync()}
                   disabled={syncing}

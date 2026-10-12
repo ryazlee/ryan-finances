@@ -81,6 +81,7 @@ export function buildSampleSnapshot(now = new Date()): Snapshot {
     serviceAccountEmail: null,
     plaidEnv: null,
     syncedAt: now.toISOString(),
+    linkedItems: 0,
     sample: true,
     accounts: [
       {

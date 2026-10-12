@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -16,6 +17,8 @@ type SnapshotContextValue = {
   view: Snapshot | null
   loading: boolean
   error: string | null
+  refreshingBanks: boolean
+  bankError: string | null
   usingSample: boolean
   refresh: () => Promise<void>
   showSample: () => void
@@ -29,6 +32,9 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [usingSample, setUsingSample] = useState(false)
+  const [refreshingBanks, setRefreshingBanks] = useState(false)
+  const [bankError, setBankError] = useState<string | null>(null)
+  const refreshedBanks = useRef(false)
   const sample = useMemo(() => buildSampleSnapshot(), [])
 
   const refresh = useCallback(async () => {
@@ -48,6 +54,24 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
     void refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (refreshedBanks.current) return
+    if (!remote?.sheetConfigured || !remote.plaidConfigured || remote.linkedItems < 1) return
+    refreshedBanks.current = true
+    setRefreshingBanks(true)
+    void (async () => {
+      try {
+        await api('/api/sync', { method: 'POST' })
+        await refresh()
+        setBankError(null)
+      } catch (caught) {
+        setBankError(caught instanceof Error ? caught.message : 'Could not fetch your banks.')
+      } finally {
+        setRefreshingBanks(false)
+      }
+    })()
+  }, [remote, refresh])
+
   const view = usingSample ? sample : remote
   const value = useMemo<SnapshotContextValue>(
     () => ({
@@ -55,12 +79,14 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
       view,
       loading,
       error,
+      refreshingBanks,
+      bankError,
       usingSample,
       refresh,
       showSample: () => setUsingSample(true),
       hideSample: () => setUsingSample(false),
     }),
-    [remote, view, loading, error, usingSample, refresh],
+    [remote, view, loading, error, refreshingBanks, bankError, usingSample, refresh],
   )
 
   return <SnapshotContext.Provider value={value}>{children}</SnapshotContext.Provider>

@@ -1,3 +1,5 @@
+import { DETAIL_MONTHS } from './constants.ts'
+
 export function monthKey(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -10,6 +12,10 @@ export function recentMonths(count: number, from = new Date()): string[] {
     months.push(monthKey(new Date(from.getFullYear(), from.getMonth() - i, 1)))
   }
   return months
+}
+
+export function oldestOpenMonth(from = new Date()): string {
+  return shiftMonth(monthKey(from), -DETAIL_MONTHS)
 }
 
 export function shiftMonth(key: string, delta: number): string {

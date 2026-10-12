@@ -36,6 +36,8 @@ export type Transaction = {
   category: string
   source: CategorySource
   removed: boolean
+  /** Present on a rolled-up month total. A single purchase leaves this unset. */
+  count?: number
 }
 
 export type Snapshot = {
@@ -45,6 +47,7 @@ export type Snapshot = {
   serviceAccountEmail: string | null
   plaidEnv: 'sandbox' | 'production' | null
   syncedAt: string | null
+  linkedItems: number
   accounts: Account[]
   transactions: Transaction[]
   sample?: boolean

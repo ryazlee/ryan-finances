@@ -28,7 +28,7 @@ Open the site Vite prints. With no keys, use **Preview with sample data**. The A
 2. **Google.** Enable the Sheets API, create a service account, and download its JSON key. Put that JSON on one line in `GOOGLE_SERVICE_ACCOUNT_JSON`.
 3. **Sheet.** Create an empty spreadsheet. Put its id in `GOOGLE_SHEET_ID`. Share it with the service account email as an Editor.
 
-The first sync creates `Transactions`, `Rules`, and `Accounts` and seeds starter rules. Edit `Rules` for auto-categories. Edit `category_override` when a single purchase should win. See `PLAN.md`.
+The first sync creates `Transactions`, `Rules`, `Accounts`, `Monthly`, and `Archived`, and seeds starter rules. Edit `Rules` for auto-categories. Edit `category_override` when a single purchase should win. The current month and the three before it stay as individual rows. Older months are folded into `Monthly` as a total per card and category. `Archived` lists those transaction ids so a later sync does not add them again. See `PLAN.md`.
 
 ## Deploy
 
@@ -55,7 +55,7 @@ npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON
 
 `npm run deploy` still deploys from this machine.
 
-The Worker pulls four times a day, at midnight, 6am, noon, and 6pm Pacific while daylight saving is in effect (`0 7`, `0 13`, `0 19`, and `0 1` UTC). After the clocks fall back, those runs land an hour later until the cron is shifted.
+The Worker pulls four times a day, at midnight, 6am, noon, and 6pm Pacific while daylight saving is in effect (`0 7`, `0 13`, `0 19`, and `0 1` UTC). After the clocks fall back, those runs land an hour later until the cron is shifted. Opening the site also fetches from the Plaid connection saved the first time you link a bank.
 
 ### Google login
 

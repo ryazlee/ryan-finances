@@ -1,6 +1,8 @@
 import { Landmark, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { spendByAccount, spendByCategory, spendByMonthStacked, spendInMonth } from '../../../shared/aggregate'
+import { spendByAccount, spendByCategory, spendByMonthStacked, spendInMonth, transactionCount } from '../../../shared/aggregate'
+import { isRolledUp } from '../../../shared/condense'
+import { DETAIL_MONTHS } from '../../../shared/constants'
 import { recentMonths, shiftMonth } from '../../../shared/months'
 import AppHeader from '../AppHeader'
 import AppShell from '../AppShell'
@@ -38,7 +40,7 @@ function compareTransactions(sort: SortKey, a: Transaction, b: Transaction): num
 }
 
 export default function DashboardScreen() {
-  const { view, remote, loading, error, usingSample, showSample, hideSample } = useSnapshot()
+  const { view, remote, loading, error, refreshingBanks, usingSample, showSample, hideSample } = useSnapshot()
   const { sync, syncing, message, failed, enabled } = useSync()
   const months = useMemo(() => recentMonths(12), [])
   const current = months[months.length - 1] ?? months[0] ?? ''
@@ -71,6 +73,7 @@ export default function DashboardScreen() {
   const primarySpend = spendInMonth(scoped, primaryMonth)
   const priorSpend = spendInMonth(scoped, shiftMonth(primaryMonth, -1))
   const periodTransactions = scoped.filter((tx) => month === 'all' || tx.date.startsWith(month))
+  const rolledUp = periodTransactions.some(isRolledUp)
   const queryText = query.trim().toLowerCase()
   const listed = periodTransactions
     .filter((tx) => {
@@ -112,6 +115,7 @@ export default function DashboardScreen() {
         </div>
       ) : null}
 
+      {refreshingBanks && hasRows ? <p className="notice">Fetching your banks…</p> : null}
       {message ? <p className={failed ? 'notice notice--error' : 'notice'}>{message}</p> : null}
       {error && !usingSample ? <p className="notice notice--error">{error}</p> : null}
       {remote?.plaidEnv === 'sandbox' && !usingSample && remote.sheetConfigured ? (
@@ -120,13 +124,21 @@ export default function DashboardScreen() {
 
       {loading && !view ? <p className="notice">Loading your sheet…</p> : null}
 
-      {!loading && !hasRows ? (
+      {!loading && !hasRows && refreshingBanks ? (
+        <SectionCard title="Fetching your banks">
+          <p className="notice">Pulling accounts and transactions from the banks you already linked.</p>
+        </SectionCard>
+      ) : null}
+
+      {!loading && !hasRows && !refreshingBanks ? (
         <SectionCard title="Nothing imported yet">
           <div className="stack">
             <p className="notice">
-              {remote?.sheetConfigured
-                ? 'Link a bank to pull transactions into the sheet.'
-                : 'Add your Plaid and Google keys, then link a bank. You can preview the dashboard with sample purchases first.'}
+              {remote?.linkedItems
+                ? 'Your bank is saved. Use Sync to pull transactions into the sheet.'
+                : remote?.sheetConfigured
+                  ? 'Link a bank once. Later visits fetch it automatically.'
+                  : 'Add your Plaid and Google keys, then link a bank. You can preview the dashboard with sample purchases first.'}
             </p>
             {remote?.missing.length ? (
               <p className="notice">Still needed: {remote.missing.join(', ')}</p>
@@ -158,7 +170,7 @@ export default function DashboardScreen() {
             </article>
             <article className="surface-card stat">
               <p className="stat__label">Transactions</p>
-              <p className="stat__value">{periodTransactions.length}</p>
+              <p className="stat__value">{transactionCount(periodTransactions)}</p>
               <p className="stat__meta">{synced ? `Synced ${synced}` : 'Not synced yet'}</p>
             </article>
           </div>
@@ -252,6 +264,13 @@ export default function DashboardScreen() {
             )}
           >
             <div className="stack">
+              {rolledUp ? (
+                <p className="notice">
+                  {month === 'all'
+                    ? `Individual purchases stay for this month and the ${DETAIL_MONTHS} before it. Older months are totals by category and card.`
+                    : 'This month is stored as totals by category and card.'}
+                </p>
+              ) : null}
               <div className="filter-block">
                 <p className="field__label">Sort</p>
                 <div className="chip-row" role="group" aria-label="Sort transactions">

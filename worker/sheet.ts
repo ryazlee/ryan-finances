@@ -1,7 +1,16 @@
 import { categorize } from '../shared/categorize'
 import {
+  mergeSummaries,
+  parseSummaryGrid,
+  summaryGrid,
+  summaryTransaction,
+  type MonthSummary,
+} from '../shared/condense'
+import {
   ACCOUNT_HEADERS,
+  ARCHIVE_HEADERS,
   DEFAULT_RULES,
+  MONTHLY_HEADERS,
   RULE_FIELDS,
   RULE_HEADERS,
   SHEET_TABS,
@@ -10,6 +19,7 @@ import {
 import type { Account, Rule, RuleField, Snapshot, Transaction } from '../shared/types'
 import { sheetsJson } from './clients'
 import { googleCredentials, missingSecrets, plaidEnvironment, sheetId, type Env } from './env'
+import { readItems } from './items'
 
 type Cell = string | number | boolean
 type Grid = Cell[][]
@@ -202,27 +212,52 @@ export async function ensureWorkbook(env: Env): Promise<void> {
       ...DEFAULT_RULES.map((rule) => [rule.priority, rule.field, rule.pattern, rule.category]),
     ])
   }
+
+  const monthly = await readRange(env, `${SHEET_TABS.monthly}!A1:H1`)
+  if (monthly.length === 0) {
+    await writeRange(env, `${SHEET_TABS.monthly}!A1`, [[...MONTHLY_HEADERS]])
+  }
+
+  const archived = await readRange(env, `${SHEET_TABS.archived}!A1:A1`)
+  if (archived.length === 0) {
+    await writeRange(env, `${SHEET_TABS.archived}!A1`, [[...ARCHIVE_HEADERS]])
+  }
 }
 
 export async function readWorkbook(env: Env): Promise<{
   transactions: StoredTransaction[]
   rules: Rule[]
   accounts: Account[]
+  summaries: MonthSummary[]
   transactionRows: number
   accountRows: number
+  summaryRows: number
 }> {
-  const [transactionValues, ruleValues, accountValues] = await Promise.all([
+  const [transactionValues, ruleValues, accountValues, summaryValues] = await Promise.all([
     readRange(env, `${SHEET_TABS.transactions}!A:N`),
     readRange(env, `${SHEET_TABS.rules}!A:D`),
     readRange(env, `${SHEET_TABS.accounts}!A:H`),
+    readRange(env, `${SHEET_TABS.monthly}!A:H`),
   ])
   return {
     transactions: parseTransactions(transactionValues),
     rules: parseRules(ruleValues),
     accounts: parseAccounts(accountValues),
+    summaries: mergeSummaries(parseSummaryGrid(summaryValues), []),
     transactionRows: transactionValues.length,
     accountRows: accountValues.length,
+    summaryRows: summaryValues.length,
   }
+}
+
+export async function readArchivedIds(env: Env): Promise<{ ids: Set<string>; rows: number }> {
+  const values = await readRange(env, `${SHEET_TABS.archived}!A:A`)
+  const ids = new Set<string>()
+  for (const row of values.slice(1)) {
+    const id = cell(row, 0)
+    if (id) ids.add(id)
+  }
+  return { ids, rows: values.length }
 }
 
 function parseAccounts(values: Grid): Account[] {
@@ -258,6 +293,30 @@ export async function writeTransactions(
   await writeRange(env, `${SHEET_TABS.transactions}!A1`, values)
 }
 
+export async function writeFold(
+  env: Env,
+  summaries: MonthSummary[],
+  previousSummaryRows: number,
+  archivedIds: string[],
+  archivedRows: number,
+): Promise<void> {
+  const summaryValues = padRows(summaryGrid(summaries), previousSummaryRows, MONTHLY_HEADERS.length)
+  const data: { range: string; values: Grid }[] = [
+    { range: `${SHEET_TABS.monthly}!A1`, values: summaryValues },
+  ]
+  if (archivedIds.length > 0) {
+    const startRow = (archivedRows || 1) + 1
+    data.push({
+      range: `${SHEET_TABS.archived}!A${startRow}`,
+      values: archivedIds.map((id) => [id]),
+    })
+  }
+  await sheetsJson(env, '/values:batchUpdate', {
+    method: 'POST',
+    body: JSON.stringify({ valueInputOption: 'RAW', data }),
+  })
+}
+
 export async function writeAccounts(env: Env, accounts: Account[], previousCount: number): Promise<void> {
   const body = accounts.map((account) => [
     account.itemId,
@@ -276,6 +335,7 @@ export async function writeAccounts(env: Env, accounts: Account[], previousCount
 export async function buildSnapshot(env: Env): Promise<Snapshot> {
   const missing = missingSecrets(env)
   const credentials = googleCredentials(env)
+  const linkedItems = (await readItems(env)).length
   const base: Snapshot = {
     sheetConfigured: Boolean(sheetId(env) && credentials),
     plaidConfigured: Boolean(env.PLAID_CLIENT_ID?.trim() && env.PLAID_SECRET?.trim() && plaidEnvironment(env)),
@@ -283,16 +343,19 @@ export async function buildSnapshot(env: Env): Promise<Snapshot> {
     serviceAccountEmail: credentials?.email ?? null,
     plaidEnv: plaidEnvironment(env),
     syncedAt: null,
+    linkedItems,
     accounts: [],
     transactions: [],
   }
   if (!base.sheetConfigured) return base
 
   const workbook = await readWorkbook(env)
-  const transactions = workbook.transactions
-    .filter((row) => !row.removed)
-    .map((row) => toPublicTransaction(row, workbook.rules))
-    .sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount)
+  const transactions = [
+    ...workbook.transactions
+      .filter((row) => !row.removed)
+      .map((row) => toPublicTransaction(row, workbook.rules)),
+    ...workbook.summaries.map(summaryTransaction),
+  ].sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount)
   const syncedAt = workbook.accounts.reduce<string | null>((latest, account) => {
     if (!account.lastSynced) return latest
     if (!latest || account.lastSynced > latest) return account.lastSynced
