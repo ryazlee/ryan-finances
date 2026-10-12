@@ -11,8 +11,7 @@
   "kv_namespaces": [
     {
       "binding": "TOKENS",
-      // Replace this id: npx wrangler kv namespace create TOKENS
-      "id": "00000000000000000000000000000000"
+      "id": "dc7f1cd7a7d64b889e32bef9d7c4dcf5"
     }
   ],
   "triggers": {
