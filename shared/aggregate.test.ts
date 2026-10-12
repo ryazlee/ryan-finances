@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { spendByAccount, spendByCategory, spendByMonth, spendInMonth } from './aggregate.ts'
+import { spendByAccount, spendByCategory, spendByMonth, spendByMonthStacked, spendInMonth } from './aggregate.ts'
 import type { Transaction } from './types.ts'
 
 function tx(partial: Partial<Transaction> & Pick<Transaction, 'id' | 'amount' | 'category' | 'date'>): Transaction {
@@ -50,5 +50,17 @@ describe('aggregate', () => {
     assert.equal(cards[0]?.amount, 20)
     assert.equal(cards[1]?.label, 'Sapphire ••4242')
     assert.equal(cards[1]?.amount, 15)
+  })
+
+  it('stacks a month by category', () => {
+    const stacked = spendByMonthStacked(rows, ['2026-10'])
+    assert.equal(stacked[0]?.amount, 15)
+    assert.deepEqual(
+      stacked[0]?.parts.map((part) => [part.label, part.amount]),
+      [
+        ['Food', 10],
+        ['Coffee', 5],
+      ],
+    )
   })
 })

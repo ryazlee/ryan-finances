@@ -170,6 +170,7 @@ a {
   flex-shrink: 0;
   display: block;
   object-fit: contain;
+  border-radius: 6px;
 }
 
 .subtitle {
@@ -442,6 +443,14 @@ a {
   color: var(--text-muted);
 }
 
+.stat__meta--up {
+  color: var(--danger);
+}
+
+.stat__meta--down {
+  color: var(--success);
+}
+
 .stat__value {
   margin: 0.15rem 0;
   font-size: 1.5rem;
@@ -490,9 +499,25 @@ a {
 
 .bar__label {
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.bar--button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.bar--selected .bar__label {
+  font-weight: 600;
 }
 
 .bar__amount {
@@ -527,11 +552,20 @@ a {
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.month-chart__col--active .month-chart__label {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .month-chart__track {
   width: 100%;
-  height: 120px;
+  height: 140px;
   display: flex;
   align-items: flex-end;
   background: var(--inset);
@@ -541,16 +575,65 @@ a {
 
 .month-chart__fill {
   width: 100%;
-  background: var(--accent);
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 0;
+}
+
+.month-chart__seg {
+  width: 100%;
+  flex-basis: 0;
+  min-height: 2px;
 }
 
 .month-chart__fill--dim {
   opacity: 0.35;
 }
 
+.filter-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.filter-block .field__label {
+  margin-bottom: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
 .month-chart__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   font-size: 0.6875rem;
+  line-height: 1.2;
   color: var(--text-muted);
+}
+
+.month-chart__amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
 }
 
 .tx-group + .tx-group {
@@ -678,9 +761,6 @@ html.theme-dark .app-header {
   background: color-mix(in srgb, var(--bg) 78%, transparent);
 }
 
-html.theme-dark .brand__mark {
-  filter: invert(1);
-}
 
 @media (min-width: 720px) {
   .stat-grid {

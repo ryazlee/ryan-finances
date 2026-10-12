@@ -57,3 +57,22 @@ export function spendByMonth(transactions: Transaction[], months: string[]): Amo
     amount: spendInMonth(transactions, month),
   }))
 }
+
+export type MonthStack = AmountRow & {
+  parts: AmountRow[]
+}
+
+export function spendByMonthStacked(transactions: Transaction[], months: string[]): MonthStack[] {
+  return months.map((month) => {
+    const categories = spendByCategory(transactions, month)
+    const top = categories.slice(0, 6)
+    const rest = categories.slice(6).reduce((sum, row) => sum + row.amount, 0)
+    const parts = rest > 0 ? [...top, { key: 'Other', label: 'Other', amount: rest }] : top
+    return {
+      key: month,
+      label: month,
+      amount: parts.reduce((sum, row) => sum + row.amount, 0),
+      parts,
+    }
+  })
+}
