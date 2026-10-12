@@ -678,6 +678,10 @@ html.theme-dark .app-header {
   background: color-mix(in srgb, var(--bg) 78%, transparent);
 }
 
+html.theme-dark .brand__mark {
+  filter: invert(1);
+}
+
 @media (min-width: 720px) {
   .stat-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
