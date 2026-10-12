@@ -1,6 +1,8 @@
 import { isInvestmentActivity, isRentActivity, isVenmo } from '../../shared/categorize'
 import { isRolledUp } from '../../shared/condense'
 import type { Transaction } from '../../shared/types'
+import CategoryPicker from './CategoryPicker'
+import { AccountMark } from '../utils/marks'
 import { formatDay, formatMoney, formatMonth } from '../utils/format'
 
 const VISIBLE_LIMIT = 200
@@ -15,7 +17,19 @@ function groupByDate(transactions: Transaction[]): [string, Transaction[]][] {
   return [...groups.entries()]
 }
 
-export default function TransactionList({ transactions }: { transactions: Transaction[] }) {
+export default function TransactionList({
+  transactions,
+  categories,
+  accountType,
+  savingId,
+  onCategorize,
+}: {
+  transactions: Transaction[]
+  categories: string[]
+  accountType: (id: string) => string
+  savingId: string | null
+  onCategorize: (transaction: Transaction, category: string) => Promise<void>
+}) {
   if (transactions.length === 0) {
     return <p className="notice">Nothing matches this filter.</p>
   }
@@ -45,13 +59,20 @@ export default function TransactionList({ transactions }: { transactions: Transa
                       {rent ? <span className="badge badge--rent">Rent</span> : null}
                       {brokerage ? <span className="badge badge--broker">Brokerage</span> : null}
                     </div>
-                    <p className="tx__meta">
-                      <span>{tx.category}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{tx.mask ? `${tx.accountName} ••${tx.mask}` : tx.accountName}</span>
+                    <div className="tx__meta">
+                      <CategoryPicker
+                        transaction={tx}
+                        choices={categories}
+                        saving={savingId === tx.id}
+                        onSave={(category) => onCategorize(tx, category)}
+                      />
+                      <span className="tx__account">
+                        <AccountMark id={tx.accountId} type={accountType(tx.accountId)} />
+                        <span>{tx.mask ? `${tx.accountName} ••${tx.mask}` : tx.accountName}</span>
+                      </span>
                       {tx.pending ? <span className="badge">Pending</span> : null}
-                      {tx.source === 'override' ? <span className="badge">Override</span> : null}
-                    </p>
+                      {tx.source === 'override' ? <span className="badge">Pinned</span> : null}
+                    </div>
                   </div>
                   <div className={inflow ? 'tx__amount tx__amount--in' : 'tx__amount'}>
                     <span className="tx__way">{inflow ? 'In' : 'Out'}</span>
@@ -64,7 +85,7 @@ export default function TransactionList({ transactions }: { transactions: Transa
         </section>
       ))}
       {hidden > 0 ? (
-        <p className="notice">Showing the first {VISIBLE_LIMIT}. Narrow the month to see the rest.</p>
+        <p className="notice">Showing the first {VISIBLE_LIMIT}. Narrow the dates to see the rest.</p>
       ) : null}
     </div>
   )

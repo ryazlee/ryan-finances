@@ -165,8 +165,8 @@ export default function ConnectScreen() {
               The Rules tab maps a merchant, name, or Plaid category onto your label. Lower priority numbers win.
             </p>
             <p className="notice">
-              Type a category into <span className="mono">category_override</span> on a transaction to keep it.
-              The next sync updates everything else and leaves that cell alone. An override wins over rules.
+              Set a category on a purchase in the list. That pins it, and the next sync leaves it alone.
+              A pinned category wins over rules.
             </p>
             <p className="notice">
               Money out and money in include purchases, paychecks, Venmo, rent, and brokerage moves. Card payments, internal transfers, and pending rows stay out of those totals.

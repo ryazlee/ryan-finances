@@ -1,12 +1,17 @@
-import { categoryColor } from '../utils/categoryColor'
+import { accountColor, categoryColor } from '../utils/categoryColor'
+import { AccountMark, CategoryMark } from '../utils/marks'
 import { formatMoney } from '../utils/format'
 
 export default function HorizontalBars({
   rows,
+  kind,
+  accountType,
   selectedKey,
   onSelect,
 }: {
   rows: { key: string; label: string; amount: number }[]
+  kind: 'category' | 'account'
+  accountType?: (id: string) => string
   selectedKey?: string | null
   onSelect?: (key: string) => void
 }) {
@@ -21,11 +26,16 @@ export default function HorizontalBars({
       {rows.map((row) => {
         const selected = selectedKey === row.key
         const dim = Boolean(selectedKey) && !selected
+        const color = kind === 'account' ? accountColor(row.key) : categoryColor(row.label)
         const body = (
           <>
             <div className="bar__meta">
               <span className="bar__label">
-                <span className="swatch" style={{ background: categoryColor(row.key) }} />
+                {kind === 'account' ? (
+                  <AccountMark id={row.key} type={accountType?.(row.key)} />
+                ) : (
+                  <CategoryMark name={row.label} />
+                )}
                 {row.label}
               </span>
               <span className="bar__amount">{formatMoney(row.amount)}</span>
@@ -35,7 +45,7 @@ export default function HorizontalBars({
                 className="bar__fill"
                 style={{
                   width: `${Math.max(3, (row.amount / max) * 100)}%`,
-                  background: categoryColor(row.key),
+                  background: color,
                   opacity: dim ? 0.35 : 1,
                 }}
               />

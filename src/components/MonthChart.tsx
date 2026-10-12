@@ -1,5 +1,6 @@
 import type { MonthStack } from '../../shared/aggregate'
 import { categoryColor } from '../utils/categoryColor'
+import { CategoryMark } from '../utils/marks'
 import { formatMoney, formatMonthShort } from '../utils/format'
 
 function compactMoney(amount: number): string {
@@ -28,6 +29,10 @@ export default function MonthChart({
   }
 
   const newestFirst = [...rows].reverse()
+
+  if (rows.length === 0) {
+    return <p className="notice">No money out in this range.</p>
+  }
 
   return (
     <div>
@@ -111,7 +116,7 @@ export default function MonthChart({
         <div className="legend">
           {[...legend.entries()].map(([key, label]) => (
             <span className="legend__item" key={key}>
-              <span className="swatch" style={{ background: categoryColor(key) }} />
+              <CategoryMark name={label} />
               {label}
             </span>
           ))}

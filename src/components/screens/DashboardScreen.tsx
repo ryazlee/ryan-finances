@@ -2,7 +2,6 @@ import { Landmark, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   breakdownByMonth,
-  inflowInMonth,
   inflowTotal,
   outflowTotal,
   spendByAccount,
@@ -10,10 +9,21 @@ import {
   spendByMonthStacked,
   transactionCount,
 } from '../../../shared/aggregate'
-import { isRolledUp } from '../../../shared/condense'
-import { DETAIL_MONTHS } from '../../../shared/constants'
-import { recentMonths, shiftMonth } from '../../../shared/months'
 import { flowCategory } from '../../../shared/categorize'
+import { isRolledUp } from '../../../shared/condense'
+import { DEFAULT_RULES, DETAIL_MONTHS } from '../../../shared/constants'
+import {
+  dayCount,
+  formatPeriod,
+  includesDate,
+  monthRange,
+  monthsInRange,
+  presetForRange,
+  previousRange,
+  rangeForPreset,
+  type DateRange,
+  type RangePreset,
+} from '../../../shared/range'
 import Accordion from '../Accordion'
 import AppHeader from '../AppHeader'
 import AppShell from '../AppShell'
@@ -21,6 +31,7 @@ import Button from '../Button'
 import HorizontalBars from '../HorizontalBars'
 import MakerCredit from '../MakerCredit'
 import MonthBreakdowns from '../MonthBreakdowns'
+import DateRangeBar from '../DateRangeBar'
 import MonthChart from '../MonthChart'
 import SectionCard from '../SectionCard'
 import SignOutButton from '../SignOutButton'
@@ -28,7 +39,8 @@ import TransactionList from '../TransactionList'
 import { APP_TAGLINE } from '../../constants'
 import { useSnapshot } from '../../hooks/snapshot'
 import { useSync } from '../../hooks/useSync'
-import { formatMoney, formatMonth, formatMonthShort, formatSynced } from '../../utils/format'
+import { formatMoney, formatSynced } from '../../utils/format'
+import { AccountMark, CategoryMark } from '../../utils/marks'
 import type { Transaction } from '../../../shared/types'
 
 type SortKey = 'newest' | 'oldest' | 'high' | 'low' | 'account'
@@ -59,37 +71,68 @@ function compareTransactions(sort: SortKey, a: Transaction, b: Transaction): num
   return b.date.localeCompare(a.date) || b.amount - a.amount
 }
 
+function priorPhrase(days: number): string {
+  if (days === 1) return 'vs yesterday'
+  return `vs prior ${days} days`
+}
+
 export default function DashboardScreen() {
-  const { view, remote, loading, error, refreshingBanks, usingSample, showSample, hideSample } = useSnapshot()
+  const { view, remote, loading, error, refreshingBanks, usingSample, showSample, hideSample, setCategory: saveCategory } = useSnapshot()
   const { sync, syncing, message, failed, enabled } = useSync()
-  const months = useMemo(() => recentMonths(12), [])
-  const current = months[months.length - 1] ?? months[0] ?? ''
-  const [month, setMonth] = useState(current)
+  const [preset, setPreset] = useState<RangePreset>('30')
+  const [range, setRange] = useState<DateRange>(() => rangeForPreset('30'))
   const [accountId, setAccountId] = useState('all')
   const [category, setCategory] = useState('all')
   const [sort, setSort] = useState<SortKey>('newest')
   const [query, setQuery] = useState('')
-  const monthRowRef = useRef<HTMLDivElement>(null)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [categoryError, setCategoryError] = useState<string | null>(null)
   const cardRowRef = useRef<HTMLDivElement>(null)
+
+  function choosePreset(next: Exclude<RangePreset, 'custom'>) {
+    setPreset(next)
+    setRange(rangeForPreset(next))
+  }
+
+  function chooseRange(next: DateRange) {
+    if (!next.start || !next.end || next.start > next.end) return
+    setRange(next)
+    setPreset(presetForRange(next))
+  }
+
+  function chooseMonth(key: string) {
+    const bounds = monthRange(key)
+    if (range.start === bounds.start && range.end === bounds.end) {
+      choosePreset('30')
+      return
+    }
+    chooseRange(bounds)
+  }
 
   const transactions = view?.transactions ?? []
   const accounts = useMemo(() => {
-    const labels = new Map<string, string>()
+    const labels = new Map<string, { label: string; type: string }>()
     for (const account of view?.accounts ?? []) {
-      labels.set(account.accountId, account.mask ? `${account.accountName} ••${account.mask}` : account.accountName)
+      labels.set(account.accountId, {
+        label: account.mask ? `${account.accountName} ••${account.mask}` : account.accountName,
+        type: account.type,
+      })
     }
-    for (const tx of transactions) {
+    for (const tx of view?.transactions ?? []) {
       if (!labels.has(tx.accountId)) {
-        labels.set(tx.accountId, tx.mask ? `${tx.accountName} ••${tx.mask}` : tx.accountName)
+        labels.set(tx.accountId, {
+          label: tx.mask ? `${tx.accountName} ••${tx.mask}` : tx.accountName,
+          type: '',
+        })
       }
     }
     return [...labels.entries()]
-      .map(([id, label]) => ({ id, label }))
+      .map(([id, account]) => ({ id, label: account.label, type: account.type }))
       .sort((a, b) => a.label.localeCompare(b.label))
-  }, [transactions, view?.accounts])
+  }, [view?.accounts, view?.transactions])
+  const accountType = (id: string) => accounts.find((account) => account.id === id)?.type ?? ''
   const accountScoped = accountId === 'all' ? transactions : transactions.filter((tx) => tx.accountId === accountId)
-  const selected = month === 'all' ? null : month
-  const inPeriod = accountScoped.filter((tx) => month === 'all' || tx.date.startsWith(month))
+  const inPeriod = accountScoped.filter((tx) => includesDate(range, tx.date))
   const categoryOptions = [...inPeriod.reduce((totals, tx) => {
     const label = flowCategory(tx)
     totals.set(label, (totals.get(label) ?? 0) + Math.abs(tx.amount))
@@ -97,20 +140,40 @@ export default function DashboardScreen() {
   }, new Map<string, number>()).entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([label]) => label)
-  const viewed = category === 'all' ? accountScoped : accountScoped.filter((tx) => flowCategory(tx) === category)
-  const categories = spendByCategory(accountScoped, selected)
+  const categoryChoices = useMemo(() => {
+    const names = new Set(DEFAULT_RULES.map((rule) => rule.category))
+    for (const tx of view?.transactions ?? []) {
+      const label = tx.category.trim()
+      if (label) names.add(label)
+    }
+    return [...names].sort((a, b) => a.localeCompare(b))
+  }, [view?.transactions])
+  const scoped = category === 'all' ? accountScoped : accountScoped.filter((tx) => flowCategory(tx) === category)
+  const viewed = scoped.filter((tx) => includesDate(range, tx.date))
+  const prior = previousRange(range)
+  const priorViewed = prior ? scoped.filter((tx) => includesDate(prior, tx.date)) : []
+  const span = monthsInRange(range)
+  const chartMonths = (span === 'open'
+    ? [...new Set(viewed.map((tx) => tx.date.slice(0, 7)))]
+    : span
+  ).sort().slice(-24)
+  const highlighted = span !== 'open' && span.length === 1 && range.start === monthRange(span[0] ?? '').start && range.end === monthRange(span[0] ?? '').end
+    ? span[0] ?? null
+    : null
+  const categories = spendByCategory(viewed, null)
   const cards = spendByAccount(
-    category === 'all' ? transactions : transactions.filter((tx) => flowCategory(tx) === category),
-    selected,
+    (category === 'all' ? transactions : transactions.filter((tx) => flowCategory(tx) === category))
+      .filter((tx) => includesDate(range, tx.date)),
+    null,
   )
-  const byMonth = spendByMonthStacked(viewed, months).filter((row) => row.amount > 0 || selected === row.key)
-  const monthFlows = breakdownByMonth(viewed, months)
-  const primaryMonth = month === 'all' ? current : month
-  const periodOut = outflowTotal(viewed, selected)
-  const periodIn = inflowTotal(viewed, selected)
-  const priorOut = outflowTotal(viewed, shiftMonth(primaryMonth, -1))
-  const priorIn = inflowInMonth(viewed, shiftMonth(primaryMonth, -1))
-  const periodTransactions = viewed.filter((tx) => month === 'all' || tx.date.startsWith(month))
+  const byMonth = spendByMonthStacked(viewed, chartMonths).filter((row) => row.amount > 0 || highlighted === row.key)
+  const monthFlows = breakdownByMonth(viewed, chartMonths)
+  const periodLabel = formatPeriod(preset, range)
+  const periodOut = outflowTotal(viewed, null)
+  const periodIn = inflowTotal(viewed, null)
+  const priorOut = outflowTotal(priorViewed, null)
+  const priorIn = inflowTotal(priorViewed, null)
+  const periodTransactions = viewed
   const rolledUp = periodTransactions.some(isRolledUp)
   const queryText = query.trim().toLowerCase()
   const listed = periodTransactions
@@ -123,18 +186,24 @@ export default function DashboardScreen() {
     .sort((a, b) => compareTransactions(sort, a, b))
   const hasRows = usingSample || transactions.length > 0
   const synced = formatSynced(view?.syncedAt ?? null)
-  const delta = month !== 'all' && priorOut > 0 ? Math.round(((periodOut - priorOut) / priorOut) * 100) : null
-  const versus = delta == null ? null : `${delta > 0 ? '+' : ''}${delta}% vs prior month`
-  const scopeLabel = [month === 'all' ? null : formatMonthShort(primaryMonth), category === 'all' ? null : category]
-    .filter(Boolean)
-    .join(' · ')
+  const delta = prior && priorOut > 0 ? Math.round(((periodOut - priorOut) / priorOut) * 100) : null
+  const versus = delta == null ? null : `${delta > 0 ? '+' : ''}${delta}% ${priorPhrase(dayCount(range))}`
+  const scopeLabel = [periodLabel, category === 'all' ? null : category].filter(Boolean).join(' · ')
   const categoryChips = category !== 'all' && !categoryOptions.includes(category)
     ? [category, ...categoryOptions]
     : categoryOptions
 
-  useEffect(() => {
-    centerActiveChip(monthRowRef.current)
-  }, [month, hasRows])
+  async function categorize(tx: Transaction, next: string) {
+    setCategoryError(null)
+    setSavingId(tx.id)
+    try {
+      await saveCategory(tx.id, next)
+    } catch (caught) {
+      setCategoryError(caught instanceof Error ? caught.message : 'Could not save the category.')
+    } finally {
+      setSavingId(null)
+    }
+  }
 
   useEffect(() => {
     centerActiveChip(cardRowRef.current)
@@ -212,13 +281,13 @@ export default function DashboardScreen() {
               {versus ? (
                 <p className={delta != null && delta > 0 ? 'stat__meta stat__meta--up' : 'stat__meta stat__meta--down'}>{versus}</p>
               ) : (
-                <p className="stat__meta">{month === 'all' ? 'All months' : formatMonth(primaryMonth)}</p>
+                <p className="stat__meta">{periodLabel}</p>
               )}
             </article>
             <article className="surface-card stat stat--in">
               <p className="stat__label">Money in{scopeLabel ? ` · ${scopeLabel}` : ''}</p>
               <p className="stat__value">{formatMoney(periodIn)}</p>
-              <p className="stat__meta">{month === 'all' ? 'All months' : `Prior month ${formatMoney(priorIn)}`}</p>
+              <p className="stat__meta">{prior ? `Prior ${formatMoney(priorIn)}` : periodLabel}</p>
             </article>
             <article className="surface-card stat">
               <p className="stat__label">Transactions</p>
@@ -230,28 +299,8 @@ export default function DashboardScreen() {
           <SectionCard title="Filters">
             <div className="stack">
               <div className="filter-block">
-                <p className="field__label">Month</p>
-                <div className="chip-row" ref={monthRowRef}>
-                  <button
-                    type="button"
-                    className={month === 'all' ? 'chip chip--active' : 'chip'}
-                    aria-pressed={month === 'all'}
-                    onClick={() => setMonth('all')}
-                  >
-                    All
-                  </button>
-                  {months.map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={month === key ? 'chip chip--active' : 'chip'}
-                      aria-pressed={month === key}
-                      onClick={() => setMonth(key)}
-                    >
-                      {formatMonthShort(key)}
-                    </button>
-                  ))}
-                </div>
+                <p className="field__label">Time</p>
+                <DateRangeBar range={range} preset={preset} onPreset={choosePreset} onRange={chooseRange} />
               </div>
 
               {accounts.length > 0 ? (
@@ -272,10 +321,11 @@ export default function DashboardScreen() {
                         type="button"
                         className={accountId === account.id ? 'chip chip--active' : 'chip'}
                         aria-pressed={accountId === account.id}
-                        onClick={() => setAccountId(account.id)}
-                      >
-                        {account.label}
-                      </button>
+                      onClick={() => setAccountId(account.id)}
+                    >
+                      <AccountMark id={account.id} type={account.type} />
+                      {account.label}
+                    </button>
                     ))}
                   </div>
                 </div>
@@ -299,10 +349,11 @@ export default function DashboardScreen() {
                         type="button"
                         className={category === label ? 'chip chip--active' : 'chip'}
                         aria-pressed={category === label}
-                        onClick={() => setCategory(label)}
-                      >
-                        {label}
-                      </button>
+                      onClick={() => setCategory(label)}
+                    >
+                      <CategoryMark name={label} />
+                      {label}
+                    </button>
                     ))}
                   </div>
                 </div>
@@ -314,14 +365,15 @@ export default function DashboardScreen() {
           <SectionCard title="Money out by month">
             <MonthChart
               rows={byMonth}
-              selected={selected}
-              onSelect={(key) => setMonth((currentMonth) => (currentMonth === key ? 'all' : key))}
+              selected={highlighted}
+              onSelect={chooseMonth}
             />
           </SectionCard>
 
           <div className="dash-grid">
             <SectionCard title="By category">
               <HorizontalBars
+                kind="category"
                 rows={category === 'all' ? categories : categories.filter((row) => row.key === category)}
                 selectedKey={category === 'all' ? null : category}
                 onSelect={(key) => setCategory((currentCategory) => (currentCategory === key ? 'all' : key))}
@@ -329,6 +381,8 @@ export default function DashboardScreen() {
             </SectionCard>
             <SectionCard title="By account">
               <HorizontalBars
+                kind="account"
+                accountType={accountType}
                 rows={cards}
                 selectedKey={accountId === 'all' ? null : accountId}
                 onSelect={(key) => setAccountId((currentId) => (currentId === key ? 'all' : key))}
@@ -341,11 +395,10 @@ export default function DashboardScreen() {
             action={<span className="section-meta">{listed.length}</span>}
           >
             <div className="stack">
+              {categoryError ? <p className="notice notice--error">{categoryError}</p> : null}
               {rolledUp ? (
                 <p className="notice">
-                  {month === 'all'
-                    ? `Months older than ${DETAIL_MONTHS} months are totals by category and card.`
-                    : 'This month is a total by category and card.'}
+                  Months older than {DETAIL_MONTHS} months are totals by category and card. Those totals stay as they were folded.
                 </p>
               ) : null}
               <label className="filter-block">
@@ -374,22 +427,33 @@ export default function DashboardScreen() {
                   ))}
                 </div>
               </div>
-              <TransactionList transactions={listed} />
+              <TransactionList
+                transactions={listed}
+                categories={categoryChoices}
+                accountType={accountType}
+                savingId={savingId}
+                onCategorize={categorize}
+              />
             </div>
           </SectionCard>
 
           <Accordion
             title="Categories each month"
-            hint={month === 'all' ? 'All months' : formatMonthShort(primaryMonth)}
+            hint={periodLabel}
           >
-            <MonthBreakdowns months={monthFlows} selected={selected} kind="categories" />
+            <MonthBreakdowns months={monthFlows} selected={highlighted} kind="categories" />
           </Accordion>
 
           <Accordion
             title="Accounts each month"
-            hint={month === 'all' ? 'All months' : formatMonthShort(primaryMonth)}
+            hint={periodLabel}
           >
-            <MonthBreakdowns months={monthFlows} selected={selected} kind="accounts" />
+            <MonthBreakdowns
+              months={monthFlows}
+              selected={highlighted}
+              kind="accounts"
+              accountType={accountType}
+            />
           </Accordion>
         </>
       ) : null}

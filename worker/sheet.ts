@@ -333,6 +333,59 @@ function parseAccounts(values: Grid): Account[] {
   return accounts
 }
 
+function columnLetter(index: number): string {
+  let n = index + 1
+  let letters = ''
+  while (n > 0) {
+    const rem = (n - 1) % 26
+    letters = String.fromCharCode(65 + rem) + letters
+    n = Math.floor((n - 1) / 26)
+  }
+  return letters
+}
+
+export async function setCategoryOverride(env: Env, transactionId: string, category: string): Promise<void> {
+  const values = await readRange(env, `${SHEET_TABS.transactions}!A:N`)
+  const header = values[0] ?? []
+  const idCol = columnIndex(header, 'transaction_id')
+  const overrideCol = columnIndex(header, 'category_override')
+  const categoryCol = columnIndex(header, 'category')
+  const autoCol = columnIndex(header, 'category_auto')
+  if (idCol < 0 || overrideCol < 0 || categoryCol < 0) {
+    throw new Error('The Transactions tab is missing category columns.')
+  }
+  let rowIndex = -1
+  for (let index = 1; index < values.length; index += 1) {
+    if (cell(values[index] ?? [], idCol) === transactionId) {
+      rowIndex = index
+      break
+    }
+  }
+  if (rowIndex < 0) {
+    throw new Error('That purchase is not on the Transactions tab. Folded months stay as a total.')
+  }
+  const row = values[rowIndex] ?? []
+  const override = category.trim()
+  const shown = override || cell(row, autoCol) || cell(row, categoryCol) || 'Uncategorized'
+  const rowNumber = rowIndex + 1
+  await sheetsJson(env, '/values:batchUpdate', {
+    method: 'POST',
+    body: JSON.stringify({
+      valueInputOption: 'RAW',
+      data: [
+        {
+          range: `${SHEET_TABS.transactions}!${columnLetter(overrideCol)}${rowNumber}`,
+          values: [[override]],
+        },
+        {
+          range: `${SHEET_TABS.transactions}!${columnLetter(categoryCol)}${rowNumber}`,
+          values: [[shown]],
+        },
+      ],
+    }),
+  })
+}
+
 export async function writeTransactions(
   env: Env,
   rows: StoredTransaction[],

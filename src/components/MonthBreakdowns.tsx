@@ -1,4 +1,5 @@
 import type { FlowSplit, MonthBreakdown } from '../../shared/aggregate'
+import { AccountMark, CategoryMark } from '../utils/marks'
 import { formatMoney, formatMonth } from '../utils/format'
 
 function FlowBadge({ label }: { label: string }) {
@@ -8,7 +9,17 @@ function FlowBadge({ label }: { label: string }) {
   return <span>{label}</span>
 }
 
-function DirectionLines({ rows, direction }: { rows: FlowSplit[]; direction: 'out' | 'in' }) {
+function DirectionLines({
+  rows,
+  direction,
+  kind,
+  accountType,
+}: {
+  rows: FlowSplit[]
+  direction: 'out' | 'in'
+  kind: 'categories' | 'accounts'
+  accountType?: (id: string) => string
+}) {
   const visible = rows
     .filter((row) => row[direction] > 0)
     .sort((a, b) => b[direction] - a[direction] || a.label.localeCompare(b.label))
@@ -20,6 +31,11 @@ function DirectionLines({ rows, direction }: { rows: FlowSplit[]; direction: 'ou
       {visible.map((row) => (
         <div className="flow-line" key={row.key}>
           <span className="flow-line__label">
+            {kind === 'accounts' ? (
+              <AccountMark id={row.key} type={accountType?.(row.key)} />
+            ) : (
+              <CategoryMark name={row.label} />
+            )}
             <FlowBadge label={row.label} />
           </span>
           <span className="flow-line__amount">{formatMoney(row[direction])}</span>
@@ -33,10 +49,12 @@ export default function MonthBreakdowns({
   months,
   selected,
   kind,
+  accountType,
 }: {
   months: MonthBreakdown[]
   selected: string | null
   kind: 'categories' | 'accounts'
+  accountType?: (id: string) => string
 }) {
   const visible = [...months].reverse().filter((month) => month.out > 0 || month.in > 0 || selected === month.key)
   if (visible.length === 0) {
@@ -64,11 +82,11 @@ export default function MonthBreakdowns({
             </header>
             <div className="month-break__group">
               <p className="month-break__group-label">Money out</p>
-              <DirectionLines rows={rows} direction="out" />
+              <DirectionLines rows={rows} direction="out" kind={kind} accountType={accountType} />
             </div>
             <div className="month-break__group month-break__group--in">
               <p className="month-break__group-label">Money in</p>
-              <DirectionLines rows={rows} direction="in" />
+              <DirectionLines rows={rows} direction="in" kind={kind} accountType={accountType} />
             </div>
           </article>
         )

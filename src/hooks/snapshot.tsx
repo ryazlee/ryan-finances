@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { buildSampleSnapshot } from '../../shared/sample'
-import type { Snapshot } from '../../shared/types'
+import type { Snapshot, Transaction } from '../../shared/types'
 import { api } from '../utils/api'
 
 type SnapshotContextValue = {
@@ -21,11 +21,22 @@ type SnapshotContextValue = {
   bankError: string | null
   usingSample: boolean
   refresh: () => Promise<void>
+  setCategory: (id: string, category: string) => Promise<void>
   showSample: () => void
   hideSample: () => void
 }
 
 const SnapshotContext = createContext<SnapshotContextValue | null>(null)
+
+function applyCategoryEdit(tx: Transaction, category: string): Transaction {
+  const override = category.trim()
+  return {
+    ...tx,
+    categoryOverride: override,
+    category: override || tx.categoryAuto || tx.category,
+    source: override ? 'override' : 'plaid',
+  }
+}
 
 export function SnapshotProvider({ children }: { children: ReactNode }) {
   const [remote, setRemote] = useState<Snapshot | null>(null)
@@ -34,6 +45,7 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
   const [usingSample, setUsingSample] = useState(false)
   const [refreshingBanks, setRefreshingBanks] = useState(false)
   const [bankError, setBankError] = useState<string | null>(null)
+  const [sampleEdits, setSampleEdits] = useState<Record<string, string>>({})
   const refreshedBanks = useRef(false)
   const sample = useMemo(() => buildSampleSnapshot(), [])
 
@@ -72,7 +84,41 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
     })()
   }, [remote, refresh])
 
-  const view = usingSample ? sample : remote
+  const view = useMemo(() => {
+    const base = usingSample ? sample : remote
+    if (!base || !usingSample || Object.keys(sampleEdits).length === 0) return base
+    return {
+      ...base,
+      transactions: base.transactions.map((tx) => (
+        sampleEdits[tx.id] === undefined ? tx : applyCategoryEdit(tx, sampleEdits[tx.id] ?? '')
+      )),
+    }
+  }, [remote, sample, sampleEdits, usingSample])
+
+  const setCategory = useCallback(async (id: string, category: string) => {
+    if (usingSample) {
+      setSampleEdits((current) => ({ ...current, [id]: category }))
+      return
+    }
+    const snapshot = remote
+    if (!snapshot) throw new Error('Nothing to update.')
+    const previous = snapshot.transactions
+    setRemote({
+      ...snapshot,
+      transactions: previous.map((tx) => (tx.id === id ? applyCategoryEdit(tx, category) : tx)),
+    })
+    try {
+      await api('/api/category', {
+        method: 'POST',
+        body: JSON.stringify({ transactionId: id, category }),
+      })
+      await refresh()
+    } catch (caught) {
+      setRemote((current) => (current ? { ...current, transactions: previous } : current))
+      throw caught
+    }
+  }, [refresh, remote, usingSample])
+
   const value = useMemo<SnapshotContextValue>(
     () => ({
       remote,
@@ -83,10 +129,11 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
       bankError,
       usingSample,
       refresh,
+      setCategory,
       showSample: () => setUsingSample(true),
       hideSample: () => setUsingSample(false),
     }),
-    [remote, view, loading, error, refreshingBanks, bankError, usingSample, refresh],
+    [remote, view, loading, error, refreshingBanks, bankError, usingSample, refresh, setCategory],
   )
 
   return <SnapshotContext.Provider value={value}>{children}</SnapshotContext.Provider>

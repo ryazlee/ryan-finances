@@ -11,7 +11,7 @@ import {
 import { corsHeaders, json, originAllowed, readJson } from './http'
 import { readItems, writeItems } from './items'
 import { createSession, deleteSession, readSession } from './session'
-import { buildSnapshot } from './sheet'
+import { buildSnapshot, setCategoryOverride } from './sheet'
 import { syncAll } from './sync'
 
 async function institutionName(env: Env, accessToken: string): Promise<string> {
@@ -157,6 +157,26 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       sync,
       syncError,
     }, 200, request)
+  }
+
+  if (pathname === '/api/category') {
+    if (!sheetId(env) || !googleCredentials(env)) {
+      return json({ error: 'Add the Google Sheet id and service account before categorizing.' }, 400, request)
+    }
+    const body = (await readJson(request)) as { transactionId?: unknown; category?: unknown }
+    const transactionId = body.transactionId
+    const category = body.category
+    if (typeof transactionId !== 'string' || !transactionId.trim()) {
+      return json({ error: 'Missing a transaction.' }, 400, request)
+    }
+    if (transactionId.startsWith('summary:')) {
+      return json({ error: 'That month is already a total. Categorize a purchase while it is still listed.' }, 400, request)
+    }
+    if (typeof category !== 'string' || category.trim().length > 48 || /[\r\n]/.test(category)) {
+      return json({ error: 'Enter a category of 48 characters or fewer.' }, 400, request)
+    }
+    await setCategoryOverride(env, transactionId.trim(), category)
+    return json({ ok: true }, 200, request)
   }
 
   if (pathname === '/api/sync') {
