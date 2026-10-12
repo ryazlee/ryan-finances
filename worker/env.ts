@@ -8,6 +8,8 @@ export interface Env {
   GOOGLE_SERVICE_ACCOUNT_JSON?: string
   GOOGLE_CLIENT_EMAIL?: string
   GOOGLE_PRIVATE_KEY?: string
+  GOOGLE_OAUTH_CLIENT_ID?: string
+  ALLOWED_EMAIL?: string
 }
 
 export type GoogleCredentials = {

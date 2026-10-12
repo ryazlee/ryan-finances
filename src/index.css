@@ -596,6 +596,10 @@ a {
   color: var(--text-secondary);
 }
 
+.google-button {
+  min-height: 44px;
+}
+
 .connect {
   width: 100%;
   max-width: 40rem;

@@ -9,6 +9,7 @@ import HorizontalBars from '../HorizontalBars'
 import MakerCredit from '../MakerCredit'
 import MonthChart from '../MonthChart'
 import SectionCard from '../SectionCard'
+import SignOutButton from '../SignOutButton'
 import TransactionList from '../TransactionList'
 import { APP_TAGLINE } from '../../constants'
 import { useSnapshot } from '../../hooks/snapshot'
@@ -60,6 +61,7 @@ export default function DashboardScreen() {
             />
           ) : null}
           <Button label="Banks" variant="ghost" to="/connect" icon={<Landmark size={16} />} />
+          <SignOutButton />
         </AppHeader>
       )}
     >

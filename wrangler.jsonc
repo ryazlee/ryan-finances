@@ -16,5 +16,8 @@
   ],
   "triggers": {
     "crons": ["0 13 * * *"]
+  },
+  "vars": {
+    "ALLOWED_EMAIL": "ryan.j.lee99@gmail.com"
   }
 }

@@ -4,6 +4,7 @@ import AppHeader from '../AppHeader'
 import AppShell from '../AppShell'
 import Button from '../Button'
 import SectionCard from '../SectionCard'
+import SignOutButton from '../SignOutButton'
 import { useSnapshot } from '../../hooks/snapshot'
 import { useSync } from '../../hooks/useSync'
 import { api } from '../../utils/api'
@@ -74,6 +75,7 @@ export default function ConnectScreen() {
       header={(
         <AppHeader subtitle="Banks and the private sheet.">
           <Button label="Dashboard" variant="ghost" to="/" />
+          <SignOutButton />
         </AppHeader>
       )}
     >

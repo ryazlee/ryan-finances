@@ -57,14 +57,17 @@ npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON
 
 The cron is `0 13 * * *` (13:00 UTC).
 
-### Cloudflare Access (Google login)
+### Google login
 
-GitHub Pages is a public static site, so Cloudflare Access cannot sit in front of it. Access can still wrap the Worker at `finance-tracker.ryazlee.workers.dev`. Do that before you link a real bank if the transaction API should require your Google account. The daily cron is not a browser request, so it still runs. The Pages dashboard calls that Worker, so locking the Worker with Access also blocks the Pages site from loading data.
+The dashboard stays behind a Google sign-in. The Worker checks the Google ID token on every `/api` request and allows only `ryan.j.lee99@gmail.com`. The daily sync does not go through that check.
 
-1. Zero Trust → Settings → Authentication → Add Google. Cloudflare shows a redirect URL. In Google Cloud, create an OAuth client (Web application) with that redirect URL, and paste the client id and secret back into Cloudflare.
-2. Access → Applications → Self-hosted. Domain is the Worker hostname (`something.workers.dev` or your custom domain). Leave the path open so `/` and `/api` are both covered.
-3. On that application, allow only the Google login method. Do not leave One-time PIN enabled.
-4. Policy: Allow. Include → Emails → your Gmail address.
+GitHub Pages cannot sit behind Cloudflare Access, so the login lives in the app. Create a Google OAuth client (Web application) with these JavaScript origins:
+
+- `https://ryazlee.github.io`
+- `https://finance-tracker.ryazlee.workers.dev`
+- `http://localhost:5173`
+
+Put that client id in `GOOGLE_OAUTH_CLIENT_ID` (Worker var or `.dev.vars`) and in `VITE_GOOGLE_CLIENT_ID` for the Pages build.
 
 ## Spend numbers
 

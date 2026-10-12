@@ -1,4 +1,5 @@
 import type { SyncCounts } from '../shared/types'
+import { allowedEmail, verifiedGoogleEmail } from './auth'
 import { plaid } from './clients'
 import {
   googleCredentials,
@@ -29,6 +30,17 @@ async function institutionName(env: Env, accessToken: string): Promise<string> {
   }
 }
 
+async function requireUser(request: Request, env: Env): Promise<Response | null> {
+  const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim() ?? ''
+  if (!clientId) return json({ error: 'Google sign-in is not configured.' }, 401, request)
+  const email = await verifiedGoogleEmail(request, clientId)
+  if (!email) return json({ error: 'Sign in with Google.' }, 401, request)
+  if (email !== allowedEmail(env)) {
+    return json({ error: 'This Google account cannot open the tracker.' }, 403, request)
+  }
+  return null
+}
+
 function requireReady(request: Request, env: Env): Response | null {
   if (!sheetId(env) || !googleCredentials(env)) {
     return json({ error: 'Add the Google Sheet id and service account before linking a bank.', missing: missingSecrets(env) }, 400, request)
@@ -54,6 +66,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (!originAllowed(request)) {
     return json({ error: 'Cross-origin request blocked.' }, 403, request)
   }
+
+  const denied = await requireUser(request, env)
+  if (denied) return denied
 
   if (request.method === 'GET' && pathname === '/api/snapshot') {
     return json(await buildSnapshot(env), 200, request)
