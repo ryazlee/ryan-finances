@@ -18,6 +18,7 @@
     "crons": ["0 13 * * *"]
   },
   "vars": {
-    "ALLOWED_EMAIL": "ryan.j.lee99@gmail.com"
+    "ALLOWED_EMAIL": "ryan.j.lee99@gmail.com",
+    "GOOGLE_OAUTH_CLIENT_ID": "204992750801-1l0t0b7cim1aghen1q9c96l8d3s6blb4.apps.googleusercontent.com"
   }
 }

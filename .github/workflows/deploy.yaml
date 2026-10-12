@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  VITE_GOOGLE_CLIENT_ID: 204992750801-1l0t0b7cim1aghen1q9c96l8d3s6blb4.apps.googleusercontent.com
+
 jobs:
   test:
     runs-on: ubuntu-latest

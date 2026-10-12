@@ -67,7 +67,7 @@ GitHub Pages cannot sit behind Cloudflare Access, so the login lives in the app.
 - `https://finance-tracker.ryazlee.workers.dev`
 - `http://localhost:5173`
 
-Put that client id in `GOOGLE_OAUTH_CLIENT_ID` (Worker var or `.dev.vars`) and in `VITE_GOOGLE_CLIENT_ID` for the Pages build.
+The client id is `GOOGLE_OAUTH_CLIENT_ID` on the Worker and `VITE_GOOGLE_CLIENT_ID` in the Pages build.
 
 ## Spend numbers
 
