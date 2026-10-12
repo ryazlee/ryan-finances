@@ -10,6 +10,15 @@ function writeCookie(value: string, maxAge: number) {
   document.cookie = `${KEY}=${value}; Max-Age=${maxAge}; Path=${cookiePath()}; SameSite=Lax${secure}`
 }
 
+function remember(id: string) {
+  try {
+    localStorage.setItem(KEY, id)
+  } catch {
+    // The cookie still restores this visit.
+  }
+  writeCookie(id, MAX_AGE)
+}
+
 export function readSession(): string {
   try {
     sessionStorage.removeItem('finance-tracker-google')
@@ -17,32 +26,28 @@ export function readSession(): string {
     // Older tabs stored a short-lived token here.
   }
 
+  let id = ''
   try {
     const saved = localStorage.getItem(KEY)?.trim() ?? ''
-    if (/^[a-f0-9]{64}$/.test(saved)) return saved
+    if (/^[a-f0-9]{64}$/.test(saved)) id = saved
   } catch {
     // Fall through to the cookie.
   }
 
-  const prefix = `${KEY}=`
-  const match = document.cookie.split('; ').find((part) => part.startsWith(prefix))
-  const value = match ? decodeURIComponent(match.slice(prefix.length)) : ''
-  if (!/^[a-f0-9]{64}$/.test(value)) return ''
-  try {
-    localStorage.setItem(KEY, value)
-  } catch {
-    // The cookie still restores this visit.
+  if (!id) {
+    const prefix = `${KEY}=`
+    const match = document.cookie.split('; ').find((part) => part.startsWith(prefix))
+    const value = match ? decodeURIComponent(match.slice(prefix.length)) : ''
+    if (/^[a-f0-9]{64}$/.test(value)) id = value
   }
-  return value
+
+  if (!id) return ''
+  remember(id)
+  return id
 }
 
 export function writeSession(id: string) {
-  try {
-    localStorage.setItem(KEY, id)
-  } catch {
-    // The cookie below is the other copy.
-  }
-  writeCookie(id, MAX_AGE)
+  remember(id)
 }
 
 export function clearSession() {

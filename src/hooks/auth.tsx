@@ -2,7 +2,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -31,10 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     forgetSession(current)
   }, [])
 
-  useEffect(() => {
-    setAccessToken(token)
-    setUnauthorizedHandler(signOut)
-  }, [signOut, token])
+  // The dashboard fetches as soon as it mounts. Put the saved session on
+  // those requests before that, or a 401 clears the cookie.
+  setAccessToken(token)
+  setUnauthorizedHandler(token ? signOut : () => {})
 
   const value = useMemo(() => ({ signOut }), [signOut])
 

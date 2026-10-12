@@ -1,3 +1,5 @@
+import { writeSession } from './session'
+
 const apiOrigin = (import.meta.env.VITE_API_ORIGIN ?? '').replace(/\/$/, '')
 
 let accessToken = ''
@@ -36,10 +38,12 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (init?.body && !headers.has('content-type')) {
     headers.set('content-type', 'application/json')
   }
-  if (accessToken) headers.set('authorization', `Bearer ${accessToken}`)
+  const sentToken = accessToken
+  if (sentToken) headers.set('authorization', `Bearer ${sentToken}`)
   const response = await fetch(`${apiOrigin}${path}`, { ...init, headers })
   const data = (await response.json().catch(() => ({}))) as { error?: unknown }
-  if (response.status === 401) onUnauthorized()
+  if (response.ok && /^[a-f0-9]{64}$/.test(sentToken)) writeSession(sentToken)
+  if (response.status === 401 && sentToken && sentToken === accessToken) onUnauthorized()
   if (!response.ok) {
     const message = typeof data.error === 'string' ? data.error : `Request failed (${response.status}).`
     throw new ApiError(response.status, message)
