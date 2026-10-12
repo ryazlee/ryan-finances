@@ -16,6 +16,7 @@ import {
   SHEET_TABS,
   TX_HEADERS,
 } from '../shared/constants'
+import { expandedGrid } from '../shared/sheet-grid'
 import type { Account, Rule, RuleField, Snapshot, Transaction } from '../shared/types'
 import { sheetsJson } from './clients'
 import { googleCredentials, missingSecrets, plaidEnvironment, sheetId, type Env } from './env'
@@ -97,6 +98,55 @@ async function writeRange(env: Env, range: string, values: Grid): Promise<void> 
   await sheetsJson(env, `/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
     method: 'PUT',
     body: JSON.stringify({ values }),
+  })
+}
+
+type NeededGrid = { title: string; rows: number; columns: number }
+
+async function ensureGrids(env: Env, needed: NeededGrid[]): Promise<void> {
+  if (needed.length === 0) return
+  const spreadsheet = await sheetsJson<{
+    sheets?: {
+      properties?: {
+        sheetId?: number
+        title?: string
+        gridProperties?: { rowCount?: number; columnCount?: number }
+      }
+    }[]
+  }>(env, '?fields=sheets.properties(sheetId,title,gridProperties)')
+  const sizes = new Map<string, { sheetId: number; rowCount: number; columnCount: number }>()
+  for (const sheet of spreadsheet.sheets ?? []) {
+    const properties = sheet.properties
+    const title = properties?.title
+    if (!title || properties.sheetId == null) continue
+    sizes.set(title, {
+      sheetId: properties.sheetId,
+      rowCount: properties.gridProperties?.rowCount ?? 0,
+      columnCount: properties.gridProperties?.columnCount ?? 0,
+    })
+  }
+
+  const requests = needed.flatMap((sheet) => {
+    const current = sizes.get(sheet.title)
+    if (!current) throw new Error(`Missing ${sheet.title} tab.`)
+    const next = expandedGrid(current, sheet.rows, sheet.columns)
+    if (!next) return []
+    return [
+      {
+        updateSheetProperties: {
+          properties: {
+            sheetId: current.sheetId,
+            gridProperties: next,
+          },
+          fields: 'gridProperties(rowCount,columnCount)',
+        },
+      },
+    ]
+  })
+  if (requests.length === 0) return
+  await sheetsJson(env, ':batchUpdate', {
+    method: 'POST',
+    body: JSON.stringify({ requests }),
   })
 }
 
@@ -290,6 +340,9 @@ export async function writeTransactions(
   previousCount: number,
 ): Promise<void> {
   const values = transactionGrid(rows, rules, previousCount)
+  await ensureGrids(env, [
+    { title: SHEET_TABS.transactions, rows: values.length, columns: TX_HEADERS.length },
+  ])
   await writeRange(env, `${SHEET_TABS.transactions}!A1`, values)
 }
 
@@ -304,13 +357,22 @@ export async function writeFold(
   const data: { range: string; values: Grid }[] = [
     { range: `${SHEET_TABS.monthly}!A1`, values: summaryValues },
   ]
+  const needed: NeededGrid[] = [
+    { title: SHEET_TABS.monthly, rows: summaryValues.length, columns: MONTHLY_HEADERS.length },
+  ]
   if (archivedIds.length > 0) {
     const startRow = (archivedRows || 1) + 1
     data.push({
       range: `${SHEET_TABS.archived}!A${startRow}`,
       values: archivedIds.map((id) => [id]),
     })
+    needed.push({
+      title: SHEET_TABS.archived,
+      rows: startRow + archivedIds.length - 1,
+      columns: ARCHIVE_HEADERS.length,
+    })
   }
+  await ensureGrids(env, needed)
   await sheetsJson(env, '/values:batchUpdate', {
     method: 'POST',
     body: JSON.stringify({ valueInputOption: 'RAW', data }),
@@ -329,6 +391,9 @@ export async function writeAccounts(env: Env, accounts: Account[], previousCount
     account.lastSynced ?? '',
   ])
   const values = padRows([[...ACCOUNT_HEADERS], ...body], previousCount, ACCOUNT_HEADERS.length)
+  await ensureGrids(env, [
+    { title: SHEET_TABS.accounts, rows: values.length, columns: ACCOUNT_HEADERS.length },
+  ])
   await writeRange(env, `${SHEET_TABS.accounts}!A1`, values)
 }
 
