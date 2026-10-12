@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { APP_TAGLINE } from '../../constants'
 import { useTheme } from '../../theme'
 import { ApiError, api, setAccessToken } from '../../utils/api'
 import { loadGoogleIdentity } from '../../utils/google'
 import AppHeader from '../AppHeader'
 import AppShell from '../AppShell'
+import MakerCredit from '../MakerCredit'
 import SectionCard from '../SectionCard'
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? ''
@@ -18,16 +20,12 @@ async function acceptCredential(
   setFailed(false)
   setAccessToken(credential)
   try {
-    await api('/api/snapshot')
-    onSignedIn(credential)
+    const created = await api<{ session: string }>('/api/session', { method: 'POST' })
+    onSignedIn(created.session)
   } catch (error) {
     setAccessToken('')
-    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-      setFailed(true)
-      setMessage(error.message)
-      return
-    }
-    onSignedIn(credential)
+    setFailed(true)
+    setMessage(error instanceof ApiError ? error.message : 'Could not save this sign-in.')
   }
 }
 
@@ -77,18 +75,17 @@ export default function LoginScreen({ onSignedIn }: { onSignedIn: (token: string
   }, [theme])
 
   return (
-    <AppShell header={<AppHeader subtitle="Private spend dashboard." />}>
-      <div className="connect">
-        <SectionCard title="Sign in">
-          <div className="stack">
-            <p className="notice">Only the Google account this tracker allows can open it.</p>
-            {clientId ? <div className="google-button" ref={buttonRef} /> : (
-              <p className="notice notice--error">Google sign-in is not configured yet.</p>
-            )}
-            {message ? <p className={failed ? 'notice notice--error' : 'notice'}>{message}</p> : null}
-          </div>
-        </SectionCard>
-      </div>
+    <AppShell centered header={<AppHeader subtitle={APP_TAGLINE} />}>
+      <SectionCard title="Sign in">
+        <div className="stack">
+          <p className="notice">This browser keeps you signed in. Only your Google account can open it.</p>
+          {clientId ? <div className="google-button" ref={buttonRef} /> : (
+            <p className="notice notice--error">Google sign-in is not configured yet.</p>
+          )}
+          {message ? <p className={failed ? 'notice notice--error' : 'notice'}>{message}</p> : null}
+        </div>
+      </SectionCard>
+      <MakerCredit />
     </AppShell>
   )
 }

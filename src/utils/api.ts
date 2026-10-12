@@ -21,6 +21,16 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler
 }
 
+export function forgetSession(token: string) {
+  if (!token) return
+  void fetch(`${apiOrigin}/api/session`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${token}` },
+  }).catch(() => {
+    // The local copy is already gone. The server copy expires on its own.
+  })
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   if (init?.body && !headers.has('content-type')) {

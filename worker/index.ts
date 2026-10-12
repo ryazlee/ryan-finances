@@ -10,6 +10,7 @@ import {
 } from './env'
 import { corsHeaders, json, originAllowed, readJson } from './http'
 import { readItems, writeItems } from './items'
+import { createSession, deleteSession, readSession } from './session'
 import { buildSnapshot } from './sheet'
 import { syncAll } from './sync'
 
@@ -30,9 +31,20 @@ async function institutionName(env: Env, accessToken: string): Promise<string> {
   }
 }
 
+function bearer(request: Request): string {
+  const header = request.headers.get('authorization') ?? ''
+  return header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+}
+
 async function requireUser(request: Request, env: Env): Promise<Response | null> {
   const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim() ?? ''
   if (!clientId) return json({ error: 'Google sign-in is not configured.' }, 401, request)
+  const token = bearer(request)
+  if (token && !token.includes('.')) {
+    const email = await readSession(env, token)
+    if (email === allowedEmail(env)) return null
+    return json({ error: 'Sign in with Google.' }, 401, request)
+  }
   const email = await verifiedGoogleEmail(request, clientId)
   if (!email) return json({ error: 'Sign in with Google.' }, 401, request)
   if (email !== allowedEmail(env)) {
@@ -67,8 +79,24 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return json({ error: 'Cross-origin request blocked.' }, 403, request)
   }
 
+  if (request.method === 'POST' && pathname === '/api/session') {
+    const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim() ?? ''
+    if (!clientId) return json({ error: 'Google sign-in is not configured.' }, 401, request)
+    const email = await verifiedGoogleEmail(request, clientId)
+    if (!email) return json({ error: 'Sign in with Google.' }, 401, request)
+    if (email !== allowedEmail(env)) {
+      return json({ error: 'This Google account cannot open the tracker.' }, 403, request)
+    }
+    return json({ session: await createSession(env, email) }, 200, request)
+  }
+
   const denied = await requireUser(request, env)
   if (denied) return denied
+
+  if (request.method === 'DELETE' && pathname === '/api/session') {
+    await deleteSession(env, bearer(request))
+    return new Response(null, { status: 204, headers: corsHeaders(request) })
+  }
 
   if (request.method === 'GET' && pathname === '/api/snapshot') {
     return json(await buildSnapshot(env), 200, request)

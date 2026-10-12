@@ -59,7 +59,7 @@ The cron is `0 13 * * *` (13:00 UTC).
 
 ### Google login
 
-The dashboard stays behind a Google sign-in. The Worker checks the Google ID token on every `/api` request and allows only `ryan.j.lee99@gmail.com`. The daily sync does not go through that check.
+The dashboard stays behind a Google sign-in. The Worker checks that sign-in on every `/api` request and allows only `ryan.j.lee99@gmail.com`. This browser remembers it for 30 days. The daily sync does not go through that check.
 
 GitHub Pages cannot sit behind Cloudflare Access, so the login lives in the app. Create a Google OAuth client (Web application) with these JavaScript origins:
 

@@ -8,10 +8,9 @@ import {
   type ReactNode,
 } from 'react'
 import LoginScreen from '../components/screens/LoginScreen'
-import { setAccessToken, setUnauthorizedHandler } from '../utils/api'
-import { disableGoogleAutoSelect, tokenStillValid } from '../utils/google'
-
-const TOKEN_KEY = 'finance-tracker-google'
+import { forgetSession, setAccessToken, setUnauthorizedHandler } from '../utils/api'
+import { disableGoogleAutoSelect } from '../utils/google'
+import { clearSession, readSession, writeSession } from '../utils/session'
 
 type AuthContextValue = {
   signOut: () => void
@@ -19,29 +18,17 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function readToken(): string {
-  try {
-    const saved = sessionStorage.getItem(TOKEN_KEY) ?? ''
-    if (saved && tokenStillValid(saved)) return saved
-    sessionStorage.removeItem(TOKEN_KEY)
-  } catch {
-    // Ignore storage failures and require a fresh sign-in.
-  }
-  return ''
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState(readToken)
+  const [token, setToken] = useState(readSession)
 
   const signOut = useCallback(() => {
+    const current = readSession()
     disableGoogleAutoSelect()
-    try {
-      sessionStorage.removeItem(TOKEN_KEY)
-    } catch {
-      // The in-memory token still clears below.
-    }
+    clearSession()
+    setUnauthorizedHandler(() => {})
     setAccessToken('')
     setToken('')
+    forgetSession(current)
   }, [])
 
   useEffect(() => {
@@ -55,11 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (
       <LoginScreen
         onSignedIn={(next) => {
-          try {
-            sessionStorage.setItem(TOKEN_KEY, next)
-          } catch {
-            // The session still lasts until this tab reloads.
-          }
+          writeSession(next)
           setToken(next)
         }}
       />
