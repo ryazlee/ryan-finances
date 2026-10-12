@@ -55,7 +55,7 @@ npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON
 
 `npm run deploy` still deploys from this machine.
 
-The cron is `0 13 * * *` (13:00 UTC).
+The Worker pulls four times a day, at midnight, 6am, noon, and 6pm Pacific while daylight saving is in effect (`0 7`, `0 13`, `0 19`, and `0 1` UTC). After the clocks fall back, those runs land an hour later until the cron is shifted.
 
 ### Google login
 
