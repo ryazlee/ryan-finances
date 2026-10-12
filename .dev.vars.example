@@ -1,0 +1,13 @@
+# Copy to .dev.vars. Never commit .dev.vars.
+# Plaid → https://dashboard.plaid.com/developers/keys
+PLAID_CLIENT_ID=
+PLAID_SECRET=
+# sandbox (fake bank) or production (real accounts)
+PLAID_ENV=sandbox
+
+# The id in https://docs.google.com/spreadsheets/d/<id>/edit
+GOOGLE_SHEET_ID=
+
+# One-line JSON from the Google service-account key file.
+# Share the sheet with the client_email as an Editor.
+GOOGLE_SERVICE_ACCOUNT_JSON=
