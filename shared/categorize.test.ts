@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { categorize, countsAsInflow, countsAsSpend, flowCategory, isVenmo } from './categorize.ts'
+import { DEFAULT_RULES } from './constants.ts'
 import type { Rule } from './types.ts'
 
 const rules: Rule[] = [
@@ -65,6 +66,31 @@ describe('categorize', () => {
     )
     assert.equal(result.category, 'General Merchandise')
     assert.equal(result.source, 'plaid')
+  })
+
+  it('puts flights and bookings in Travel even when Plaid calls them shopping', () => {
+    const flight = categorize(
+      {
+        name: 'DELTA AIR 006',
+        merchant: 'Delta Air Lines',
+        plaidCategory: 'GENERAL_MERCHANDISE',
+        categoryOverride: '',
+      },
+      DEFAULT_RULES,
+    )
+    assert.equal(flight.category, 'Travel')
+    assert.equal(flight.source, 'rule')
+
+    const stay = categorize(
+      {
+        name: 'AIRBNB * HM XYZ',
+        merchant: 'Airbnb',
+        plaidCategory: 'GENERAL_MERCHANDISE',
+        categoryOverride: '',
+      },
+      DEFAULT_RULES,
+    )
+    assert.equal(stay.category, 'Travel')
   })
 })
 

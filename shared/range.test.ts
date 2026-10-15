@@ -22,8 +22,15 @@ describe('range', () => {
     assert.equal(rangeForPreset('all', end).start, '2000-01-01')
   })
 
+  it('builds month-to-date and year-to-date from the end day', () => {
+    assert.deepEqual(rangeForPreset('mtd', end), { start: '2026-10-01', end })
+    assert.deepEqual(rangeForPreset('ytd', end), { start: '2026-01-01', end })
+    assert.equal(presetForRange({ start: '2026-10-01', end }, end), 'mtd')
+    assert.equal(presetForRange({ start: '2026-01-01', end }, end), 'ytd')
+  })
+
   it('treats a hand-picked span as custom and walks back one window', () => {
-    const range = { start: '2026-10-01', end: '2026-10-12' }
+    const range = { start: '2026-09-15', end: '2026-10-12' }
     assert.equal(presetForRange(range, end), 'custom')
     assert.deepEqual(previousRange(rangeForPreset('7', end)), { start: '2026-09-29', end: '2026-10-05' })
     assert.equal(previousRange(rangeForPreset('all', end)), null)

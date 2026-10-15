@@ -8,9 +8,9 @@ export type DateRange = {
 /** Start used by All time. A range that begins here has no prior window. */
 export const ALL_TIME_START = '2000-01-01'
 
-export type RangePreset = 'today' | '7' | '14' | '30' | '90' | 'all' | 'custom'
+export type RangePreset = 'today' | '7' | '14' | '30' | '90' | 'mtd' | 'ytd' | 'all' | 'custom'
 
-const CHIP_PRESETS: Exclude<RangePreset, 'custom'>[] = ['today', '7', '14', '30', '90', 'all']
+const CHIP_PRESETS: Exclude<RangePreset, 'custom'>[] = ['today', '7', '14', '30', '90', 'mtd', 'ytd', 'all']
 
 export function toISODate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -25,6 +25,8 @@ export function todayISO(from = new Date()): string {
 export function rangeForPreset(preset: Exclude<RangePreset, 'custom'>, end = todayISO()): DateRange {
   if (preset === 'today') return { start: end, end }
   if (preset === 'all') return { start: ALL_TIME_START, end }
+  if (preset === 'mtd') return { start: `${end.slice(0, 7)}-01`, end }
+  if (preset === 'ytd') return { start: `${end.slice(0, 4)}-01-01`, end }
   const endDate = new Date(`${end}T12:00:00`)
   const startDate = new Date(endDate)
   startDate.setDate(endDate.getDate() - (Number(preset) - 1))
@@ -51,6 +53,8 @@ export function formatRangeLabel(range: DateRange): string {
 export function formatPeriod(preset: RangePreset, range: DateRange): string {
   if (preset === 'today') return 'Today'
   if (preset === 'all') return 'All time'
+  if (preset === 'mtd') return 'Month to date'
+  if (preset === 'ytd') return 'Year to date'
   if (preset === '7' || preset === '14' || preset === '30' || preset === '90') return `Last ${preset} days`
   return formatRangeLabel(range)
 }
