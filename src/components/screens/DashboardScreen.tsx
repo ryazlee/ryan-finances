@@ -79,8 +79,8 @@ function priorPhrase(days: number): string {
 export default function DashboardScreen() {
   const { view, remote, loading, error, refreshingBanks, usingSample, showSample, hideSample, setCategory: saveCategory } = useSnapshot()
   const { sync, syncing, message, failed, enabled } = useSync()
-  const [preset, setPreset] = useState<RangePreset>('30')
-  const [range, setRange] = useState<DateRange>(() => rangeForPreset('30'))
+  const [preset, setPreset] = useState<RangePreset>('mtd')
+  const [range, setRange] = useState<DateRange>(() => rangeForPreset('mtd'))
   const [accountId, setAccountId] = useState('all')
   const [category, setCategory] = useState('all')
   const [sort, setSort] = useState<SortKey>('newest')
@@ -103,7 +103,7 @@ export default function DashboardScreen() {
   function chooseMonth(key: string) {
     const bounds = monthRange(key)
     if (range.start === bounds.start && range.end === bounds.end) {
-      choosePreset('30')
+      choosePreset('mtd')
       return
     }
     chooseRange(bounds)
